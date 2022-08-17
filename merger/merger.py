@@ -17,19 +17,20 @@ def merge_spreadsheets(main_file_path, new_file_path):
     # Locate column label positions
     label_positions = _locate_labels(main_sheet, new_sheet)
     opp_id_col = label_positions[_OPPORTUNITY_LABEL].new_col
+    opp_id_col_index = opp_id_col - 1
 
     # Find all "Opportunity ID's" in the main sheet
-    for (new_opp_cell,) in new_sheet.iter_rows(min_col=opp_id_col, max_col=opp_id_col, min_row=2):
-        new_opp_id = str(new_opp_cell.value)
-        main_opp_row = _locate_opp_row(main_sheet, opp_id_col, new_opp_id)
+    for (new_opp_row,) in new_sheet.iter_rows(min_col=opp_id_col, max_col=opp_id_col, min_row=2):
+        new_opp_id = str(new_opp_row[opp_id_col_index].value)
+        main_opp_row = _locate_opp_row(main_sheet, opp_id_col, opp_id_col_index, new_opp_id)
 
         # If a row wasn't found for this opportunity in the main sheet, it must be new and inserted into the sheet
         if not main_opp_row:
             main_sheet.insert_rows(2)
-            main_opp_row = 2
+            main_opp_row = main_sheet.iter_rows(min_row=2, max_row=2)
 
         # Update all previous opportunities in the main sheet with new sheet data
-        _update_opp_row(main_sheet, new_sheet, label_positions, main_opp_row, new_opp_cell.row)
+        _update_opp_row(main_opp_row, new_opp_row, label_positions)
 
     # TODO REMOVE THIS FOR FINAL VERSION
     # Creates copy
@@ -46,7 +47,6 @@ class _LabelColumns:
 
 def _locate_labels(main_sheet: pyxl.workbook.workbook.Worksheet, new_sheet: pyxl.workbook.workbook.Worksheet):
     """Map column labels used in new sheet to the main sheet positions"""
-
     label_positions = {}
 
     for (main_label_cell,) in main_sheet.iter_cols(min_col=1, min_row=1, max_row=1):
@@ -70,18 +70,17 @@ def _locate_labels(main_sheet: pyxl.workbook.workbook.Worksheet, new_sheet: pyxl
     return label_positions
 
 
-def _locate_opp_row(sheet: pyxl.workbook.workbook.Worksheet, opp_id_col: int, opp_id: str) -> Optional[int]:
-    """Using the given opportunity id, find the row it is located on within the opportunity id column of the given
-    worksheet"""
-
-    for (curr_opp_id,) in sheet.iter_rows(min_col=opp_id_col, max_col=opp_id_col, min_row=2):
-        if curr_opp_id.value == opp_id:
-            return curr_opp_id.row
+def _locate_opp_row(sheet: pyxl.workbook.workbook.Worksheet,
+                    opp_id_col: int, opp_id_col_index: int, opp_id: str)-> Optional[int]:
+    """Using the given opportunity id, output the row data it is located on within the opportunity id
+    column of the given worksheet"""
+    for curr_opp_row in sheet.iter_rows(min_col=opp_id_col, max_col=opp_id_col, min_row=2):
+        if curr_opp_row[opp_id_col_index].value == opp_id:
+            return curr_opp_row
 
     # The given opportunity id wasn't found
     return None
 
 
-def _update_opp_row(main_sheet: pyxl.workbook.workbook.Worksheet, new_sheet: pyxl.workbook.workbook.Worksheet,
-                    label_positions: Dict[str, _LabelColumns], main_row: int, new_row: int):
+def _update_opp_row(main_row, new_row, label_positions: Dict[str, _LabelColumns]):
     pass
