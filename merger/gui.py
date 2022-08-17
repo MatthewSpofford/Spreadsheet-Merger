@@ -13,13 +13,20 @@ class MergerGUI(Frame):
 
     def __init__(self, root):
         super().__init__(root, padding=("20", "20", "20", "20"))
+        self._root = root
 
         self.columnconfigure(2, weight=1)
         self.rowconfigure(2, weight=1)
 
         self._main_select = SpreadsheetSelect(root, 0, "Original Spreadsheet")
+        if __debug__:
+            self._main_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\" \
+                                          "NortheastOpportunities_081122_ColumnHeaders.xlsx"
 
         self._new_select = SpreadsheetSelect(root, 1, "New Spreadsheet")
+        if __debug__:
+            self._new_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\" \
+                                         "NortheastOpportunities_081122 - Copy.xlsx"
 
         self._merge_btn = Button(root, text="Merge", command=self.merge_spreadsheets)
         self._merge_btn.grid(column=0, row=2, columnspan=3, padx=20, pady=10)
@@ -45,13 +52,12 @@ class MergerGUI(Frame):
         # Begin spreadsheet merging process
         try:
             merger.merge_spreadsheets(self._main_select.file_path,
-                               self._new_select.file_path)
+                                      self._new_select.file_path)
         except Exception as e:
             messagebox.showerror("Merge Error", str(e))
 
         # Close app
-        from merger.__main__ import root
-        root.quit()
+        self._root.quit()
 
 
 class SpreadsheetSelect:
