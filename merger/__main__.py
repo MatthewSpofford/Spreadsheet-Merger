@@ -3,9 +3,12 @@ from tkinter.ttk import *
 from .gui import MergerGUI
 
 
+__version__ = "1.0"
+
+
 if __name__ == "__main__":
     root = Tk()
-    root.title("Spreadsheet Merger")
+    root.title(f"Spreadsheet Merger ({__version__})")
     root.columnconfigure(0, weight=1)
     root.rowconfigure(0, weight=1)
 

@@ -2,7 +2,7 @@ import os
 from typing import Optional, Dict, NamedTuple
 
 import openpyxl as pyxl
-
+import openpyxl.writer.excel
 
 _OPPORTUNITY_LABEL = "Opportunity Id"
 
@@ -16,18 +16,19 @@ def merge_spreadsheets(main_file_path, new_file_path):
 
     # Locate column label positions
     label_indices = _locate_labels(main_sheet, new_sheet)
-    opp_id_col_index = label_indices[_OPPORTUNITY_LABEL].new_label_index
-    opp_id_col = opp_id_col_index + 1
+    opp_id_col_indices = label_indices[_OPPORTUNITY_LABEL]
 
     # Find all "Opportunity ID's" in the main sheet
-    for (new_opp_row,) in new_sheet.iter_rows(min_col=opp_id_col, max_col=opp_id_col, min_row=2):
-        new_opp_id = str(new_opp_row[opp_id_col_index].value)
-        main_opp_row = _locate_opp_row(main_sheet, opp_id_col, opp_id_col_index, new_opp_id)
+    for new_opp_row in new_sheet.iter_rows(min_row=650, max_row=new_sheet.max_row):
+        print(f"CURRENT ROW: {new_opp_row[opp_id_col_indices.new_label_index].value}")
+
+        new_opp_id = str(new_opp_row[opp_id_col_indices.new_label_index].value)
+        main_opp_row = _locate_opp_row(main_sheet, opp_id_col_indices.main_label_index, new_opp_id)
 
         # If a row wasn't found for this opportunity in the main sheet, it must be new and inserted into the sheet
-        if not main_opp_row:
+        if main_opp_row is None:
             main_sheet.insert_rows(2)
-            main_opp_row = main_sheet.iter_rows(min_row=2, max_row=2)
+            main_opp_row = next(main_sheet.iter_rows(min_row=2, max_row=2))
 
         # Update all previous opportunities in the main sheet with new sheet data
         _update_opp_row(main_opp_row, new_opp_row, label_indices)
@@ -35,8 +36,8 @@ def merge_spreadsheets(main_file_path, new_file_path):
     # TODO REMOVE THIS FOR FINAL VERSION
     # Creates copy
     new_file_path = os.path.splitext(main_file_path)
-    new_file_path = os.path.join(new_file_path[0] + " (Copy)", new_file_path[1])
-    main_wb.save(new_file_path)
+    new_file_path = f"{new_file_path[0]} (Copy) {new_file_path[1]}"
+    openpyxl.writer.excel.save_workbook(main_wb, new_file_path)
 
 
 class _LabelIndices(NamedTuple):
@@ -48,6 +49,7 @@ def _locate_labels(main_sheet: pyxl.workbook.workbook.Worksheet, new_sheet: pyxl
     """Map column label indexes used in new sheet to the main sheet indexes"""
     label_indices = {}
 
+    # Iterate over all the column labels in the main sheet
     for (main_label_cell,) in main_sheet.iter_cols(min_col=1, min_row=1, max_row=1):
         new_col = 1
 
@@ -71,11 +73,11 @@ def _locate_labels(main_sheet: pyxl.workbook.workbook.Worksheet, new_sheet: pyxl
 
 
 def _locate_opp_row(sheet: pyxl.workbook.workbook.Worksheet,
-                    opp_id_col: int, opp_id_col_index: int, opp_id: str)-> Optional[int]:
+                    opp_id_col_index: int, opp_id: str)-> Optional[int]:
     """Using the given opportunity id, output the row data it is located on within the opportunity id
     column of the given worksheet"""
-    for curr_opp_row in sheet.iter_rows(min_col=opp_id_col, max_col=opp_id_col, min_row=2):
-        if curr_opp_row[opp_id_col_index].value == opp_id:
+    for curr_opp_row in sheet.iter_rows(min_row=2, max_row=sheet.max_row):
+        if str(curr_opp_row[opp_id_col_index].value) == opp_id:
             return curr_opp_row
 
     # The given opportunity id wasn't found
@@ -85,7 +87,7 @@ def _locate_opp_row(sheet: pyxl.workbook.workbook.Worksheet,
 def _update_opp_row(main_row, new_row, label_indices: Dict[str, _LabelIndices]):
     for indexes in label_indices.values():
         # If label does not exist in the new sheet, just ignore this label
-        if not indexes.new_label_index:
+        if indexes.new_label_index is None:
             continue
 
         main_row[indexes.main_label_index].value = new_row[indexes.new_label_index].value

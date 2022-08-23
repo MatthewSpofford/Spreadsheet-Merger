@@ -1,3 +1,4 @@
+import logging
 import os
 from tkinter import *
 from tkinter import filedialog, messagebox
@@ -53,11 +54,12 @@ class MergerGUI(Frame):
         try:
             merger.merge_spreadsheets(self._main_select.file_path,
                                       self._new_select.file_path)
-        except Exception as e:
-            messagebox.showerror("Merge Error", str(e))
+        except BaseException as e:
+            logging.exception("Merge exception")
+            messagebox.showerror("Merge Exception", str(e))
 
-        # Close app
-        self._root.quit()
+        # # Close app
+        # self._root.quit()
 
 
 class SpreadsheetSelect:
