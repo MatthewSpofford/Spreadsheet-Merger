@@ -6,7 +6,7 @@ from .gui import MergerGUI
 __version__ = "1.0"
 
 
-if __name__ == "__main__":
+def main():
     root = Tk()
     root.title(f"Spreadsheet Merger ({__version__})")
     root.columnconfigure(0, weight=1)
@@ -18,3 +18,7 @@ if __name__ == "__main__":
     root.bind("<Return>", gui.merge_spreadsheets)
 
     root.mainloop()
+
+
+if __name__ == "__main__":
+    main()

@@ -19,7 +19,7 @@ def merge_spreadsheets(main_file_path, new_file_path):
     opp_id_col_indices = label_indices[_OPPORTUNITY_LABEL]
 
     # Find all "Opportunity ID's" in the main sheet
-    for new_opp_row in new_sheet.iter_rows(min_row=650, max_row=new_sheet.max_row):
+    for new_opp_row in new_sheet.iter_rows(min_row=2, max_row=new_sheet.max_row):
         print(f"CURRENT ROW: {new_opp_row[opp_id_col_indices.new_label_index].value}")
 
         new_opp_id = str(new_opp_row[opp_id_col_indices.new_label_index].value)
