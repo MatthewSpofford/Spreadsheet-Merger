@@ -5,12 +5,10 @@ import openpyxl as pyxl
 import openpyxl.writer.excel
 
 
-def merge_spreadsheets(main_file_path, new_file_path, column_key):
+def merge_spreadsheets(main_file_path, new_file_path, column_key, sheet_name):
     main_wb: pyxl.workbook.workbook.Workbook = pyxl.load_workbook(main_file_path)
-    main_sheet: pyxl.workbook.workbook.Worksheet = \
-        main_wb["Manager_Opportunity_Dashboard"]
-    new_sheet: pyxl.workbook.workbook.Worksheet = \
-        pyxl.load_workbook(new_file_path, read_only=True)["Manager_Opportunity_Dashboard"]
+    main_sheet: pyxl.workbook.workbook.Worksheet = main_wb[sheet_name]
+    new_sheet: pyxl.workbook.workbook.Worksheet = pyxl.load_workbook(new_file_path, read_only=True)[sheet_name]
 
     # Locate column label positions
     label_indices = _locate_labels(main_sheet, new_sheet)
@@ -24,13 +22,15 @@ def merge_spreadsheets(main_file_path, new_file_path, column_key):
 
     # Find all "Opportunity ID's" in the main sheet
     for new_opp_row in new_sheet.iter_rows(min_row=2, max_row=new_sheet.max_row):
+        print(f"CURRENT ROW: {new_opp_row[opp_id_col_indices.new_label_index].value}")
+
         new_opp_id = str(new_opp_row[opp_id_col_indices.new_label_index].value)
         main_opp_row = _locate_opp_row(main_sheet, opp_id_col_indices.main_label_index, new_opp_id)
 
         # If a row wasn't found for this opportunity in the main sheet, it must be new and inserted into the sheet
         if main_opp_row is None:
             main_sheet.insert_rows(2)
-            main_opp_row = next(main_sheet.iter_rows(min_row=2, max_row=2))
+            main_opp_row = next(main_sheet.iter_rows(min_row=2, max_row=2, max_col=len(label_indices)))
 
         # Update all previous opportunities in the main sheet with new sheet data
         _update_opp_row(main_opp_row, new_opp_row, label_indices)
@@ -38,7 +38,7 @@ def merge_spreadsheets(main_file_path, new_file_path, column_key):
     # TODO REMOVE THIS FOR FINAL VERSION
     # Creates copy
     new_file_path = os.path.splitext(main_file_path)
-    new_file_path = f"{new_file_path[0]} (Merged) {new_file_path[1]}"
+    new_file_path = f"{new_file_path[0]} (Merged){new_file_path[1]}"
     openpyxl.writer.excel.save_workbook(main_wb, new_file_path)
 
 
@@ -52,12 +52,18 @@ def _locate_labels(main_sheet: pyxl.workbook.workbook.Worksheet, new_sheet: pyxl
     label_indices = {}
 
     # Iterate over all the column labels in the main sheet
-    for (main_label_cell,) in main_sheet.iter_cols(min_col=1, min_row=1, max_row=1):
-        new_col = 1
+    for (main_label_cell,) in main_sheet.iter_cols(max_row=1):
+        # if the main column label is empty, skip it
+        if main_label_cell.value is None:
+            continue
 
         # Find new sheet position of current column label being examined in the main sheet
-        while new_sheet.cell(1, new_col).value is not None:
+        for new_col in range(1, new_sheet.max_column + 1):
             new_label_cell = new_sheet.cell(1, new_col)
+
+            # if the new column label is empty, skip it
+            if new_label_cell.value is None:
+                continue
 
             # Keep track of where the label exists in each
             if main_label_cell.value.lower() == new_label_cell.value.lower():
