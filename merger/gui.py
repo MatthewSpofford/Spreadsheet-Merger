@@ -16,15 +16,15 @@ class MergerGUI(Frame):
         super().__init__(root, padding=("20", "20", "20", "20"))
         self._root = root
 
-        self.columnconfigure(2, weight=1)
-        self.rowconfigure(2, weight=1)
+        # self.columnconfigure(2, weight=1)
+        # self.rowconfigure(2, weight=1)
 
         self._main_select = SpreadsheetSelect(root, 0, "Original Spreadsheet")
         if __debug__:
             self._main_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\" \
                                           "NortheastOpportunities_081122_ColumnHeaders.xlsx"
 
-        self._new_select = SpreadsheetSelect(root, 1, "New Spreadsheet")
+        self._new_select = SpreadsheetSelect(root, 1, "Appending Spreadsheet")
         if __debug__:
             self._new_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\" \
                                          "NortheastOpportunities_081122 - Copy.xlsx"
@@ -83,15 +83,9 @@ class SpreadsheetSelect:
         self._select_btn.grid(column=2, row=row, padx=20, pady=15)
 
     def _select_file(self):
-        global _initial_dir
-        file_path = filedialog.askopenfilename(filetypes=[("Excel Spreadsheet", ".xlsx")],
+        self.file_path = filedialog.askopenfilename(filetypes=[("Excel Spreadsheet", ".xlsx")],
                                                title="Select Spreadsheet",
                                                initialdir=_initial_dir)
-
-        # Save initial dir in the parent directory of this newly selected file
-        _initial_dir = os.path.dirname(file_path)
-
-        self._file_path.set(file_path)
 
     @property
     def file_path(self):
@@ -100,3 +94,9 @@ class SpreadsheetSelect:
     @file_path.setter
     def file_path(self, file_path):
         self._file_path.set(file_path)
+
+        self._file_path.set(file_path)
+
+        # Save initial dir in the parent directory of this newly selected file
+        global _initial_dir
+        _initial_dir = os.path.dirname(file_path)

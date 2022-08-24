@@ -1,6 +1,7 @@
 @echo OFF
 echo Begin build...
 
-pyinstaller -F -n "Spreadsheet Merger" -w --python-option "-O" -y "./dist.py"
+set PYTHONOPTIMIZE=2 && \
+	pyinstaller -F -n "Spreadsheet Merger" -w -y "./dist.py"
 
 echo Build complete.

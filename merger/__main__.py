@@ -3,12 +3,13 @@ from tkinter.ttk import *
 from .gui import MergerGUI
 
 
-__version__ = "1.0"
+__version__ = "1.0-rc"
 
 
 def main():
     root = Tk()
-    root.title(f"Spreadsheet Merger ({__version__})")
+    root.title(f"Spreadsheet Merger (v{__version__})")
+    root.resizable(width=False, height=False)
     root.columnconfigure(0, weight=1)
     root.rowconfigure(0, weight=1)
 
