@@ -4,10 +4,8 @@ from typing import Optional, Dict, NamedTuple
 import openpyxl as pyxl
 import openpyxl.writer.excel
 
-_OPPORTUNITY_LABEL = "Opportunity Id"
 
-
-def merge_spreadsheets(main_file_path, new_file_path):
+def merge_spreadsheets(main_file_path, new_file_path, column_key):
     main_wb: pyxl.workbook.workbook.Workbook = pyxl.load_workbook(main_file_path)
     main_sheet: pyxl.workbook.workbook.Worksheet = \
         main_wb["Manager_Opportunity_Dashboard"]
@@ -16,7 +14,13 @@ def merge_spreadsheets(main_file_path, new_file_path):
 
     # Locate column label positions
     label_indices = _locate_labels(main_sheet, new_sheet)
-    opp_id_col_indices = label_indices[_OPPORTUNITY_LABEL]
+    if column_key not in label_indices:
+        raise Exception(f"The key '{column_key}' is not a column label in either of the spreadsheets.")
+    if label_indices[column_key].main_label_index is None:
+        raise Exception(f"The key '{column_key}' is not a column label in `{main_file_path}`.")
+    if label_indices[column_key].new_label_index is None:
+        raise Exception(f"The key '{column_key}' is not a column label in `{new_file_path}`.")
+    opp_id_col_indices = label_indices[column_key]
 
     # Find all "Opportunity ID's" in the main sheet
     for new_opp_row in new_sheet.iter_rows(min_row=2, max_row=new_sheet.max_row):
@@ -34,7 +38,7 @@ def merge_spreadsheets(main_file_path, new_file_path):
     # TODO REMOVE THIS FOR FINAL VERSION
     # Creates copy
     new_file_path = os.path.splitext(main_file_path)
-    new_file_path = f"{new_file_path[0]} (Copy) {new_file_path[1]}"
+    new_file_path = f"{new_file_path[0]} (Merged) {new_file_path[1]}"
     openpyxl.writer.excel.save_workbook(main_wb, new_file_path)
 
 

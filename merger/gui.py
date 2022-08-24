@@ -29,11 +29,17 @@ class MergerGUI(Frame):
             self._new_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\" \
                                          "NortheastOpportunities_081122 - Copy.xlsx"
 
-        self._merge_btn = Button(root, text="Merge", command=self.merge_spreadsheets)
-        self._merge_btn.grid(column=0, row=2, columnspan=3, padx=20, pady=10)
+        self._col_key_label = Label(root, text="Column Key:")
+        self._col_key_label.grid(column=0, row=2, padx=20, pady=15)
 
-        for child in self.winfo_children():
-            child.grid_configure(padx=5, pady=5)
+        self._col_key = StringVar()
+        if __debug__:
+            self._col_key.set("Opportunity Id")
+        self._col_key_entry = Entry(root, textvariable=self._col_key)
+        self._col_key_entry.grid(column=1, row=2, columnspan=2, padx=0, pady=15)
+
+        self._merge_btn = Button(root, text="Merge", command=self.merge_spreadsheets)
+        self._merge_btn.grid(column=0, row=3, columnspan=3, padx=20, pady=10)
 
         self._main_select._file_path_entry.focus()
 
@@ -53,7 +59,8 @@ class MergerGUI(Frame):
         # Begin spreadsheet merging process
         try:
             merger.merge_spreadsheets(self._main_select.file_path,
-                                      self._new_select.file_path)
+                                      self._new_select.file_path,
+                                      self._col_key.get())
         except BaseException as e:
             logging.exception("Merge exception")
             messagebox.showerror("Merge Exception", str(e))
