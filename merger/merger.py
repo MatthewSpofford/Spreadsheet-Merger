@@ -8,8 +8,6 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 
 def merge_spreadsheets(main_file_path, new_file_path, column_key, sheet_name, merged_file_name: str):
-    if merged_file_name is None or len(merged_file_name) == 0:
-        raise Exception("A new name for the file needs to be provided.")
     if new_file_path == main_file_path:
         raise Exception("Spreadsheet file paths cannot be identical.")
 
@@ -44,10 +42,15 @@ def merge_spreadsheets(main_file_path, new_file_path, column_key, sheet_name, me
         # Update all previous opportunities in the main sheet with new sheet data
         _update_opp_row(main_opp_row, new_opp_row, label_indices)
 
-    # Creates copy
-    merged_file_dir = os.path.dirname(main_file_path)
-    merged_file_ext = os.path.splitext(main_file_path)[1]
-    merged_file_path = os.path.join(f"{merged_file_dir}", f"{merged_file_name}{merged_file_ext}")
+    # If the merged file name is blank, assume that the main file will be used instead
+    if merged_file_name is None or len(merged_file_name) == 0:
+        merged_file_path = main_file_path
+    else:
+        merged_file_dir = os.path.dirname(main_file_path)
+        merged_file_ext = os.path.splitext(main_file_path)[1]
+        merged_file_path = os.path.join(f"{merged_file_dir}", f"{merged_file_name}{merged_file_ext}")
+
+    # Creates a copy
     openpyxl.writer.excel.save_workbook(main_wb, merged_file_path)
 
     # Close workbook files

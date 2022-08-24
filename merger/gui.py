@@ -33,14 +33,6 @@ class MergerGUI(Frame):
         self._replace_orig_check = CheckToHideEntry(root,
                                                     "Replace original spreadsheet after merge",
                                                     "Merged Spreadsheet Name")
-
-        def replace_orig_handler(checked: bool):
-            if checked:
-                name = os.path.basename(self._main_select.file_path)
-                name = os.path.splitext(name)[0]
-                self._replace_orig_check.entry_text = name
-
-        self._replace_orig_check.additional_check_handle = replace_orig_handler
         self._replace_orig_check.grid(column=0, row=4, columnspan=_column_width)
 
         self._merge_btn = Button(root, text="Merge", command=self.merge_spreadsheets)
@@ -63,6 +55,11 @@ class MergerGUI(Frame):
 
         # Begin spreadsheet merging process
         try:
+            if not self._replace_orig_check.is_checked() and \
+               (self._replace_orig_check.entry_text is None or len(self._replace_orig_check.entry_text) == 0):
+                raise Exception("A new name for the file needs to be provided. Or, check the box to have the original "
+                                "spreadsheet be replaced")
+
             merger.merge_spreadsheets(self._main_select.file_path,
                                       self._new_select.file_path,
                                       self._col_key.entry_text,
@@ -161,12 +158,18 @@ class CheckToHideEntry(Frame):
         self._additional_check_handle = additional_check_handle
         self._check_handler()
 
+    def is_checked(self) -> True:
+        return bool(self._check_state.get())
+
     def _check_handler(self):
-        check_bool = bool(self._check_state.get())
-        self._entry.disable_entry(disable=check_bool)
+        is_checked = self.is_checked()
+        self._entry.disable_entry(disable=is_checked)
+
+        if is_checked:
+            self._entry.entry_text = ""
 
         if self._additional_check_handle is not None:
-            self._additional_check_handle(check_bool)
+            self._additional_check_handle(is_checked)
 
     @property
     def entry_text(self):
