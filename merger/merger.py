@@ -3,12 +3,20 @@ from typing import Optional, Dict, NamedTuple
 
 import openpyxl as pyxl
 import openpyxl.writer.excel
+from openpyxl import Workbook
+from openpyxl.worksheet.worksheet import Worksheet
 
 
-def merge_spreadsheets(main_file_path, new_file_path, column_key, sheet_name):
-    main_wb: pyxl.workbook.workbook.Workbook = pyxl.load_workbook(main_file_path)
-    main_sheet: pyxl.workbook.workbook.Worksheet = main_wb[sheet_name]
-    new_sheet: pyxl.workbook.workbook.Worksheet = pyxl.load_workbook(new_file_path, read_only=True)[sheet_name]
+def merge_spreadsheets(main_file_path, new_file_path, column_key, sheet_name, merged_file_name: str):
+    if merged_file_name is None or len(merged_file_name) == 0:
+        raise Exception("A new name for the file needs to be provided.")
+    if new_file_path == main_file_path:
+        raise Exception("Spreadsheet file paths cannot be identical.")
+
+    main_wb: Workbook = pyxl.load_workbook(main_file_path)
+    main_sheet: Worksheet = main_wb[sheet_name]
+    new_wb: Workbook = pyxl.load_workbook(new_file_path, read_only=True)
+    new_sheet: Worksheet = new_wb[sheet_name]
 
     # Locate column label positions
     label_indices = _locate_labels(main_sheet, new_sheet)
@@ -22,7 +30,8 @@ def merge_spreadsheets(main_file_path, new_file_path, column_key, sheet_name):
 
     # Find all "Opportunity ID's" in the main sheet
     for new_opp_row in new_sheet.iter_rows(min_row=2, max_row=new_sheet.max_row):
-        print(f"CURRENT ROW: {new_opp_row[opp_id_col_indices.new_label_index].value}")
+        if __debug__:
+            print(f"CURRENT ROW: {new_opp_row[opp_id_col_indices.new_label_index].value}")
 
         new_opp_id = str(new_opp_row[opp_id_col_indices.new_label_index].value)
         main_opp_row = _locate_opp_row(main_sheet, opp_id_col_indices.main_label_index, new_opp_id)
@@ -35,11 +44,15 @@ def merge_spreadsheets(main_file_path, new_file_path, column_key, sheet_name):
         # Update all previous opportunities in the main sheet with new sheet data
         _update_opp_row(main_opp_row, new_opp_row, label_indices)
 
-    # TODO REMOVE THIS FOR FINAL VERSION
     # Creates copy
-    new_file_path = os.path.splitext(main_file_path)
-    new_file_path = f"{new_file_path[0]} (Merged){new_file_path[1]}"
-    openpyxl.writer.excel.save_workbook(main_wb, new_file_path)
+    merged_file_dir = os.path.dirname(main_file_path)
+    merged_file_ext = os.path.splitext(main_file_path)[1]
+    merged_file_path = os.path.join(f"{merged_file_dir}", f"{merged_file_name}{merged_file_ext}")
+    openpyxl.writer.excel.save_workbook(main_wb, merged_file_path)
+
+    # Close workbook files
+    main_wb.close()
+    new_wb.close()
 
 
 class _LabelIndices(NamedTuple):
@@ -47,7 +60,7 @@ class _LabelIndices(NamedTuple):
     new_label_index: Optional[int]
 
 
-def _locate_labels(main_sheet: pyxl.workbook.workbook.Worksheet, new_sheet: pyxl.workbook.workbook.Worksheet):
+def _locate_labels(main_sheet: Worksheet, new_sheet: Worksheet):
     """Map column label indexes used in new sheet to the main sheet indexes"""
     label_indices = {}
 
@@ -81,7 +94,7 @@ def _locate_labels(main_sheet: pyxl.workbook.workbook.Worksheet, new_sheet: pyxl
 
 
 def _locate_opp_row(sheet: pyxl.workbook.workbook.Worksheet,
-                    opp_id_col_index: int, opp_id: str)-> Optional[int]:
+                    opp_id_col_index: int, opp_id: str) -> Optional[int]:
     """Using the given opportunity id, output the row data it is located on within the opportunity id
     column of the given worksheet"""
     for curr_opp_row in sheet.iter_rows(min_row=2, max_row=sheet.max_row):

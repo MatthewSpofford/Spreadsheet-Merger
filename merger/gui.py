@@ -6,7 +6,6 @@ from tkinter.ttk import *
 
 import merger.merger as merger
 
-
 _initial_dir = "./"
 _column_width = 3
 
@@ -16,7 +15,7 @@ class MergerGUI(Frame):
         super().__init__(root, padding=("20", "20", "20", "20"))
         self._root = root
 
-        self._main_select = SpreadsheetSelect(root, 0, "Original Spreadsheet")
+        self._main_select = SpreadsheetSelect(root, 0, "Original Spreadsheet", True)
         if __debug__:
             self._main_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\main.xlsx"
 
@@ -25,14 +24,27 @@ class MergerGUI(Frame):
             self._new_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\additions.xlsx"
 
         self._col_key = EntryWithLabel(root, 2, "Column Key")
-        if __debug__:
-            self._col_key.entry_text = "Opportunity Id"
+        # if __debug__:
+        self._col_key.entry_text = "Opportunity Id"
         self._sheet_name = EntryWithLabel(root, 3, "Worksheet Name to Merge")
-        if __debug__:
-            self._sheet_name.entry_text = "Manager_Opportunity_Dashboard"
+        # if __debug__:
+        self._sheet_name.entry_text = "Manager_Opportunity_Dashboard"
+
+        self._replace_orig_check = CheckToHideEntry(root,
+                                                    "Replace original spreadsheet after merge",
+                                                    "Merged Spreadsheet Name")
+
+        def replace_orig_handler(checked: bool):
+            if checked:
+                name = os.path.basename(self._main_select.file_path)
+                name = os.path.splitext(name)[0]
+                self._replace_orig_check.entry_text = name
+
+        self._replace_orig_check.additional_check_handle = replace_orig_handler
+        self._replace_orig_check.grid(column=0, row=4, columnspan=_column_width)
 
         self._merge_btn = Button(root, text="Merge", command=self.merge_spreadsheets)
-        self._merge_btn.grid(column=0, row=4, columnspan=_column_width, padx=20, pady=10)
+        self._merge_btn.grid(column=0, row=5, columnspan=_column_width, padx=20, pady=10)
 
         self._main_select._file_path_entry.focus()
 
@@ -54,7 +66,8 @@ class MergerGUI(Frame):
             merger.merge_spreadsheets(self._main_select.file_path,
                                       self._new_select.file_path,
                                       self._col_key.entry_text,
-                                      self._sheet_name.entry_text)
+                                      self._sheet_name.entry_text,
+                                      self._replace_orig_check.entry_text)
         except BaseException as e:
             logging.exception("Merge exception!")
             messagebox.showerror("Merge Exception", str(e))
@@ -64,7 +77,7 @@ class MergerGUI(Frame):
 
 
 class SpreadsheetSelect:
-    def __init__(self, root, row, label_text: str):
+    def __init__(self, root, row, label_text: str, overwrite_init_dir=False):
         # super().__init__(root)
 
         # self.columnconfigure(2, weight=1)
@@ -83,6 +96,8 @@ class SpreadsheetSelect:
         self._select_btn = Button(root, text="Select...", command=self._select_file)
         self._select_btn.grid(column=_column_width - 1, row=row, padx=20, pady=15)
 
+        self._overwrite_init_dir = overwrite_init_dir
+
     def _select_file(self):
         self.file_path = filedialog.askopenfilename(filetypes=[("Excel Spreadsheet", ".xlsx")],
                                                     title="Select Spreadsheet",
@@ -99,8 +114,9 @@ class SpreadsheetSelect:
         self._file_path.set(file_path)
 
         # Save initial dir in the parent directory of this newly selected file
-        global _initial_dir
-        _initial_dir = os.path.dirname(file_path)
+        if self._overwrite_init_dir:
+            global _initial_dir
+            _initial_dir = os.path.dirname(file_path)
 
 
 class EntryWithLabel:
@@ -120,3 +136,51 @@ class EntryWithLabel:
     @entry_text.setter
     def entry_text(self, entry_text: str):
         self._entry_text.set(entry_text)
+
+    def disable_entry(self, disable: bool):
+        new_state = DISABLED if disable else NORMAL
+        self._entry.config(state=new_state)
+
+
+class CheckToHideEntry(Frame):
+    def __init__(self, root, check_label_text: str, entry_label: str, additional_check_handle=None,
+                 check_state=True):
+        """
+        :param additional_check_handle: is a function that is called after handling the initial check of the checkbox.
+        This function takes a bool as a parameter.
+        """
+        super().__init__(root, padding=("20", "20", "20", "20"), relief="solid")
+
+        self._check_state = IntVar(value=int(check_state))
+        self._check = Checkbutton(self, variable=self._check_state, text=check_label_text, command=self._check_handler)
+        self._check.grid(column=0, row=0, columnspan=_column_width)
+
+        self._entry = EntryWithLabel(self, 1, entry_label)
+
+        # Invoke check command on initialization
+        self._additional_check_handle = additional_check_handle
+        self._check_handler()
+
+    def _check_handler(self):
+        check_bool = bool(self._check_state.get())
+        self._entry.disable_entry(disable=check_bool)
+
+        if self._additional_check_handle is not None:
+            self._additional_check_handle(check_bool)
+
+    @property
+    def entry_text(self):
+        return self._entry.entry_text
+
+    @entry_text.setter
+    def entry_text(self, text: str):
+        self._entry.entry_text = text
+
+    @property
+    def additional_check_handle(self):
+        return self._additional_check_handle
+
+    @additional_check_handle.setter
+    def additional_check_handle(self, handle):
+        self._additional_check_handle = handle
+        self._check_handler()
