@@ -7,14 +7,17 @@ from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 
-def merge_spreadsheets(main_file_path, new_file_path, column_key, sheet_name, merged_file_name: str):
-    if new_file_path == main_file_path:
+def merge_spreadsheets(main_file_path: str, new_file_path: str, column_key: str, merged_file_name: str):
+    if os.path.realpath(new_file_path) == os.path.realpath(main_file_path):
         raise Exception("Spreadsheet file paths cannot be identical.")
 
     main_wb: Workbook = pyxl.load_workbook(main_file_path)
-    main_sheet: Worksheet = main_wb[sheet_name]
+    main_wb.active = 0
+    main_sheet: Worksheet = main_wb.active
+
     new_wb: Workbook = pyxl.load_workbook(new_file_path, read_only=True)
-    new_sheet: Worksheet = new_wb[sheet_name]
+    new_wb.active = 0
+    new_sheet: Worksheet = new_wb.active
 
     # Locate column label positions
     label_indices = _locate_labels(main_sheet, new_sheet)

@@ -1,9 +1,9 @@
 from tkinter import *
 from tkinter.ttk import *
-from .gui import MergerGUI
 
+from ._gui import MergerGUI
 
-__version__ = "1.0.0-rc.2"
+__version__ = "1.0.0-rc.3"
 
 
 def main():

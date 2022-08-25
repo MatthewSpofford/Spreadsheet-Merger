@@ -4,7 +4,8 @@ from tkinter import *
 from tkinter import filedialog, messagebox
 from tkinter.ttk import *
 
-import merger.merger as merger
+from .merger import merge_spreadsheets
+from ._config import Config, ConfigProperty
 
 _initial_dir = "./"
 _column_width = 3
@@ -15,8 +16,9 @@ class MergerGUI(Frame):
         super().__init__(root, padding=("20", "20", "20", "20"))
         self._root = root
 
-        self._main_select = SpreadsheetSelect(root, 0, "Original Spreadsheet", True)
-        if __debug__:
+        self._main_select = SpreadsheetSelect(root, 0, "Original Spreadsheet")
+        self._main_select.file_path = Config.get(ConfigProperty.ORIGINAL_PATH)
+        if __debug__ and self._main_select.file_path == "":
             self._main_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\main.xlsx"
 
         self._new_select = SpreadsheetSelect(root, 1, "Appending Spreadsheet")
@@ -24,21 +26,24 @@ class MergerGUI(Frame):
             self._new_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\additions.xlsx"
 
         self._col_key = EntryWithLabel(root, 2, "Column Key")
+        self._col_key.entry_text = Config.get(ConfigProperty.COLUMN_KEY)
+        if __debug__ and self._col_key.entry_text == "":
+            self._col_key.entry_text = "Opportunity Id"
+
+        # self._sheet_name = EntryWithLabel(root, 3, "Worksheet Name to Merge")
         # if __debug__:
-        self._col_key.entry_text = "Opportunity Id"
-        self._sheet_name = EntryWithLabel(root, 3, "Worksheet Name to Merge")
-        # if __debug__:
-        self._sheet_name.entry_text = "Manager_Opportunity_Dashboard"
+        #     self._sheet_name.entry_text = "Manager_Opportunity_Dashboard"
+        # self._sheet_name.entry_text = Config.get(Property.sheet_name)
 
         self._replace_orig_check = CheckToHideEntry(root,
                                                     "Replace original spreadsheet after merge",
                                                     "Merged Spreadsheet Name")
         self._replace_orig_check.grid(column=0, row=4, columnspan=_column_width)
+        self._replace_orig_check.checked = Config.get(ConfigProperty.REPLACE_ORIGINAL)
+        self._replace_orig_check.entry_text = Config.get(ConfigProperty.MERGED_FILENAME)
 
         self._merge_btn = Button(root, text="Merge", command=self.merge_spreadsheets)
         self._merge_btn.grid(column=0, row=5, columnspan=_column_width, padx=20, pady=10)
-
-        self._main_select._file_path_entry.focus()
 
     def merge_spreadsheets(self):
         # Validate file selector input for all selections
@@ -55,26 +60,34 @@ class MergerGUI(Frame):
 
         # Begin spreadsheet merging process
         try:
-            if not self._replace_orig_check.is_checked() and \
+            if not self._replace_orig_check.checked and \
                (self._replace_orig_check.entry_text is None or len(self._replace_orig_check.entry_text) == 0):
                 raise Exception("A new name for the file needs to be provided. Or, check the box to have the original "
                                 "spreadsheet be replaced")
 
-            merger.merge_spreadsheets(self._main_select.file_path,
-                                      self._new_select.file_path,
-                                      self._col_key.entry_text,
-                                      self._sheet_name.entry_text,
-                                      self._replace_orig_check.entry_text)
+            # Save to the configuration file
+            Config.set({
+                ConfigProperty.ORIGINAL_PATH: self._main_select.file_path,
+                ConfigProperty.COLUMN_KEY: self._col_key.entry_text,
+                ConfigProperty.REPLACE_ORIGINAL: self._replace_orig_check.checked,
+                ConfigProperty.MERGED_FILENAME: self._replace_orig_check.entry_text
+            })
+            merge_spreadsheets(self._main_select.file_path,
+                               self._new_select.file_path,
+                               self._col_key.entry_text,
+                               # self._sheet_name.entry_text,
+                               self._replace_orig_check.entry_text)
+
+
+            messagebox.showinfo("Merge Complete", "Spreadsheets merged successfully!")
         except BaseException as e:
             logging.exception("Merge exception!")
             messagebox.showerror("Merge Exception", str(e))
             return
 
-        messagebox.showinfo("Merge Complete", "Spreadsheets merged successfully!")
-
 
 class SpreadsheetSelect:
-    def __init__(self, root, row, label_text: str, overwrite_init_dir=False):
+    def __init__(self, root, row, label_text: str, overwrite_init_dir=True):
         # super().__init__(root)
 
         # self.columnconfigure(2, weight=1)
@@ -158,21 +171,27 @@ class CheckToHideEntry(Frame):
         self._additional_check_handle = additional_check_handle
         self._check_handler()
 
-    def is_checked(self) -> True:
+    @property
+    def checked(self) -> bool:
         return bool(self._check_state.get())
 
-    def _check_handler(self):
-        is_checked = self.is_checked()
-        self._entry.disable_entry(disable=is_checked)
+    @checked.setter
+    def checked(self, value: bool):
+        self._check_state.set(int(value))
+        self._check_handler()
 
-        if is_checked:
+    def _check_handler(self):
+        checked = self.checked
+        self._entry.disable_entry(disable=checked)
+
+        if checked:
             self._entry.entry_text = ""
 
         if self._additional_check_handle is not None:
-            self._additional_check_handle(is_checked)
+            self._additional_check_handle(checked)
 
     @property
-    def entry_text(self):
+    def entry_text(self) -> str:
         return self._entry.entry_text
 
     @entry_text.setter
