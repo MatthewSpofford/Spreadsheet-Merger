@@ -1,4 +1,6 @@
+import logging
 from tkinter import *
+from tkinter import messagebox
 
 import merger
 from ._gui.loading_screen import LoadingScreen
@@ -14,12 +16,12 @@ def init():
     root.grid_columnconfigure(0, weight=1)
     root.grid_rowconfigure(0, weight=1)
 
-    switch_frame(MergeConfig)
+    switch_frames(MergeConfig)
 
     root.mainloop()
 
 
-def switch_frame(new_frame, *additional_params):
+def switch_frames(new_frame, *additional_params):
     root.unbind("<Return>")
 
     # Copy the children names so that an exception isn't thrown when the list of children changes size
@@ -29,3 +31,12 @@ def switch_frame(new_frame, *additional_params):
 
     gui: Frame = new_frame(root, *additional_params)
     gui.grid(sticky="nsew")
+
+
+def after(ms: int, func):
+    root.after(ms, func)
+
+
+def display_error(title: str, e: Exception):
+    logging.exception(title)
+    messagebox.showerror(title, str(e))

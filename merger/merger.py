@@ -1,11 +1,31 @@
 import os
-from multiprocessing import Process
-from typing import Optional, Dict, NamedTuple
+import signal
+from enum import StrEnum, auto
+from multiprocessing import Process, Pipe
+from multiprocessing.dummy.connection import Connection
+from typing import Optional, NamedTuple, Union, get_args, Tuple
 
 import openpyxl as pyxl
 import openpyxl.writer.excel
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
+
+
+class MessageStatus(StrEnum):
+    INIT = auto()
+    MERGING = auto()
+    SAVING = auto()
+    COMPLETE = auto()
+
+
+MessageGroup = Tuple[str, int, int]
+f"""
+str[0] - status of the merging process, based on {MessageStatus}\n
+int[1] - current progress value (context dependent on the status string)\n
+int[2] - current maximum value that is trying to be reached (context dependent on the status string)\n
+"""
+
+MessageType = Union[MessageGroup, str, Exception]
 
 
 class Merger:
@@ -27,48 +47,70 @@ class Merger:
         self._new_wb.active = 0
         self._new_sheet: Worksheet = self._new_wb.active
 
-    def merge_spreadsheets(self):
         # Locate column label positions
-        label_indices = self._locate_labels()
-        if self.column_key not in label_indices:
+        self.label_indices = self._locate_labels()
+        if self.column_key not in self.label_indices:
             raise Exception(f"The key '{self.column_key}' is not a column label in either of the spreadsheets.")
-        if label_indices[self.column_key].main_label_index is None:
+        if self.label_indices[self.column_key].main_label_index is None:
             raise Exception(f"The key '{self.column_key}' is not a column label in `{self.main_file_path}`.")
-        if label_indices[self.column_key].new_label_index is None:
+        if self.label_indices[self.column_key].new_label_index is None:
             raise Exception(f"The key '{self.column_key}' is not a column label in `{self.new_file_path}`.")
-        key_col_indices = label_indices[self.column_key]
 
-        # Find all rows in the main sheet based on the current key value in the new sheet
-        for new_key_row in self._new_sheet.iter_rows(min_row=2, max_row=self._new_sheet.max_row):
-            if __debug__:
-                print(f"CURRENT ROW: {new_key_row[key_col_indices.new_label_index].value}")
+        # May be used later for non-blocking functionality for passing around data about the progress
+        self._merger_conn: Optional[Connection] = None
 
-            new_key_val = str(new_key_row[key_col_indices.new_label_index].value)
-            main_key_row = self._locate_key_row(self._main_sheet, key_col_indices.main_label_index, new_key_val)
+    def _update_status(self, message: MessageType):
+        if self._merger_conn is not None:
+            self._merger_conn.send(message)
 
-            # If a row wasn't found for this key in the main sheet, it must be new and inserted into the sheet
-            if main_key_row is None:
-                main_sheet.insert_rows(2)
-                main_key_row = next(main_sheet.iter_rows(min_row=2, max_row=2, max_col=len(label_indices)))
+    def merge(self):
+        try:
+            self._update_status((MessageStatus.MERGING, 0, self._new_sheet.max_row - 1))
+            key_col_indices = self.label_indices[self.column_key]
 
-            # Update all previous keys in the main sheet with new sheet data
-            self._update_row(main_key_row, new_key_row, label_indices)
+            # Find all rows in the main sheet based on the current key value in the new sheet
+            for new_key_row_index, new_key_row in enumerate(self._new_sheet.iter_rows(min_row=2, max_row=self._new_sheet.max_row)):
+                if __debug__:
+                    print(f"CURRENT ROW: {new_key_row[key_col_indices.new_label_index].value}")
 
-        # If the merged file name is blank, assume that the main file will be used instead
-        if merged_file_name is None or len(merged_file_name) == 0:
-            self.merged_file_path = main_file_path
-        else:
-            merged_file_dir = os.path.dirname(self.main_file_path)
-            merged_file_ext = os.path.splitext(self.main_file_path)[1]
-            self.merged_file_path = os.path.join(f"{merged_file_dir}", f"{merged_file_name}{merged_file_ext}")
+                new_key_val = str(new_key_row[key_col_indices.new_label_index].value)
+                main_key_row = self._locate_key_row(self._main_sheet, key_col_indices.main_label_index, new_key_val)
 
-        # Creates a copy
-        openpyxl.writer.excel.save_workbook(main_wb, self.merged_file_path)
+                # If a row wasn't found for this key in the main sheet, it must be new and inserted into the sheet
+                if main_key_row is None:
+                    main_sheet.insert_rows(2)
+                    main_key_row = next(main_sheet.iter_rows(min_row=2, max_row=2, max_col=len(self.label_indices)))
 
+                # Update all previous keys in the main sheet with new sheet data
+                self._update_row(main_key_row, new_key_row)
+
+                # Send status update about completed row
+                self._update_status((MessageStatus.MERGING, new_key_row_index + 1, self._new_sheet.max_row - 1))
+
+            self._update_status(MessageStatus.SAVING)
+
+            # If the merged file name is blank, assume that the main file will be used instead
+            if merged_file_name is None or len(merged_file_name) == 0:
+                self.merged_file_path = main_file_path
+            else:
+                merged_file_dir = os.path.dirname(self.main_file_path)
+                merged_file_ext = os.path.splitext(self.main_file_path)[1]
+                self.merged_file_path = os.path.join(f"{merged_file_dir}", f"{merged_file_name}{merged_file_ext}")
+
+            # Creates a copy
+            openpyxl.writer.excel.save_workbook(main_wb, self.merged_file_path)
+        except BaseException as e:
+            if self._merger_conn is not None:
+                self._merger_conn.send(e)
+            raise e
+        finally:
+            self._clean_stop()
+            self._update_status(MessageStatus.COMPLETE)
+
+    def _clean_stop(self):
         # Close workbook files
         self._main_wb.close()
         self._new_wb.close()
-
 
     class _LabelIndices(NamedTuple):
         main_label_index: int
@@ -116,9 +158,8 @@ class Merger:
         # The given key wasn't found
         return None
 
-    @staticmethod
-    def _update_row(main_row, new_row, label_indices: Dict[str, _LabelIndices]):
-        for indexes in label_indices.values():
+    def _update_row(self, main_row, new_row):
+        for indexes in self.label_indices.values():
             # If label does not exist in the new sheet, just ignore this label
             if indexes.new_label_index is None:
                 continue
@@ -126,8 +167,47 @@ class Merger:
             main_row[indexes.main_label_index].value = new_row[indexes.new_label_index].value
 
 
-# class MergerNonblocking(Merger):
-#     def __init__(self, *args):
-#         super().__init__(*args)
+class NonblockingMerger(Merger):
+    def __init__(self, *args):
+        super().__init__(*args)
 
+        self._nonblock_conn, self._merger_conn = Pipe()
+        self._merge_proc = Process(target=self._start_merge, daemon=True)
 
+    def merge(self):
+        self._merge_proc.start()
+
+    def _start_merge(self):
+        # Set up a termination handler for the new process in the case it needs to be cancelled
+        def termination_handler(sig_num, stack_frame):
+            self._clean_stop()
+            exit(0)
+        signal.signal(signal.SIGTERM, termination_handler)
+
+        # Send initialization status before merging
+        self._update_status(MessageStatus.INIT)
+
+        # Begin the blocking merge process on the new process
+        super().merge()
+
+    def stop(self):
+        self._merge_proc.terminate()
+        self._merge_proc.join()
+
+    def get_status(self) -> Optional[MessageType]:
+        message: Optional[MessageType] = None
+        while self._nonblock_conn.poll():
+            message = self._nonblock_conn.recv()
+
+        # If the message received is not of the expected type, then something has gone wrong
+        if isinstance(message, get_args(Optional[MessageType])):
+            raise Exception("Received invalid status update during merge process.")
+
+        # An error occurred in the merge process
+        if isinstance(message, Exception):
+            raise message
+
+        return message
+
+# TODO Make sure that the _locate_row_key or whatever it's called doesn't always start at 2,
+#      because that can shift if a new row is inserted over time, and we can make it a bit more optimal

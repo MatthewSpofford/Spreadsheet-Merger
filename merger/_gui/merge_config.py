@@ -1,4 +1,3 @@
-import logging
 import os
 from tkinter import *
 from tkinter import filedialog, messagebox
@@ -7,6 +6,7 @@ from tkinter.ttk import *
 from merger import app
 from merger._gui.loading_screen import LoadingScreen
 from merger._config import Config, ConfigProperty
+from merger.merger import NonblockingMerger
 
 _initial_dir = Config.get(ConfigProperty.INITIAL_DIR)
 _column_width = 3
@@ -20,8 +20,8 @@ class MergeConfig(Frame):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        self._root = root
-        self._root.bind("<Return>", self.merge_spreadsheets)
+        self.root = root
+        self.root.bind("<Return>", self.merge_spreadsheets)
 
         self._main_select = SpreadsheetSelect(self, 0, "Original Spreadsheet")
         self._main_select.file_path = Config.get(ConfigProperty.ORIGINAL_PATH)
@@ -79,16 +79,15 @@ class MergeConfig(Frame):
                 ConfigProperty.INITIAL_DIR: _initial_dir,
             })
 
-            messagebox.showinfo("Merge Complete", "Spreadsheets merged successfully!")
-            app.switch_frame(LoadingScreen,
-                             self._main_select.file_path,
-                             self._new_select.file_path,
-                             self._col_key.entry_text,
-                             # self._sheet_name.entry_text,
-                             self._replace_orig_check.entry_text,)
+            merger = NonblockingMerger(self._main_select.file_path,
+                                       self._new_select.file_path,
+                                       self._col_key.entry_text,
+                                       # self._sheet_name.entry_text,
+                                       self._replace_orig_check.entry_text,)
+
+            app.switch_frames(LoadingScreen, merger)
         except BaseException as e:
-            logging.exception("Merge exception!")
-            messagebox.showerror("Merge Exception", str(e))
+            app.display_error("Merge Configuration Error", e)
             return
 
 
