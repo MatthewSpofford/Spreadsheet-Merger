@@ -1,10 +1,15 @@
 import os
+from multiprocessing import Process
 from typing import Optional, Dict, NamedTuple
 
 import openpyxl as pyxl
 import openpyxl.writer.excel
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
+
+
+# def merge_spreadsheets(*args):
+#     merge_process = Process(target=_merge_spreadsheets, args=args, daemon=True)
 
 
 def merge_spreadsheets(main_file_path: str, new_file_path: str, column_key: str, merged_file_name: str):
@@ -15,7 +20,7 @@ def merge_spreadsheets(main_file_path: str, new_file_path: str, column_key: str,
     main_wb.active = 0
     main_sheet: Worksheet = main_wb.active
 
-    new_wb: Workbook = pyxl.load_workbook(new_file_path, read_only=True)
+    new_wb: Workbook = pyxl.load_workbook(new_file_path)  # , read_only=True)
     new_wb.active = 0
     new_sheet: Worksheet = new_wb.active
 
@@ -77,8 +82,7 @@ def _locate_labels(main_sheet: Worksheet, new_sheet: Worksheet):
             continue
 
         # Find new sheet position of current column label being examined in the main sheet
-        for new_col in range(1, new_sheet.max_column + 1):
-            new_label_cell = new_sheet.cell(1, new_col)
+        for (new_label_cell,) in new_sheet.iter_cols(max_row=1):
 
             # if the new column label is empty, skip it
             if new_label_cell.value is None:
@@ -89,8 +93,6 @@ def _locate_labels(main_sheet: Worksheet, new_sheet: Worksheet):
                 label_indices[main_label_cell.value] = _LabelIndices(main_label_cell.column - 1,
                                                                      new_label_cell.column - 1)
                 break
-
-            new_col += 1
 
         # Column label in main does not exist in new, and should be ignored later on
         if main_label_cell.value not in label_indices:

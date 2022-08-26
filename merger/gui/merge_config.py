@@ -4,10 +4,10 @@ from tkinter import *
 from tkinter import filedialog, messagebox
 from tkinter.ttk import *
 
-from .merger import merge_spreadsheets
-from ._config import Config, ConfigProperty
+from merger.merger import merge_spreadsheets
+from merger._config import Config, ConfigProperty
 
-_initial_dir = "./"
+_initial_dir = Config.get(ConfigProperty.INITIAL_DIR)
 _column_width = 3
 
 
@@ -15,20 +15,19 @@ class MergerGUI(Frame):
     def __init__(self, root):
         super().__init__(root, padding=("20", "20", "20", "20"))
         self._root = root
+        self._root.bind("<Return>", self.merge_spreadsheets)
 
         self._main_select = SpreadsheetSelect(root, 0, "Original Spreadsheet")
         self._main_select.file_path = Config.get(ConfigProperty.ORIGINAL_PATH)
         if __debug__ and self._main_select.file_path == "":
-            self._main_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\main.xlsx"
+            self._main_select.file_path = "/samples/main.xlsx"
 
         self._new_select = SpreadsheetSelect(root, 1, "Appending Spreadsheet")
-        if __debug__:
-            self._new_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\additions.xlsx"
+        # if __debug__:
+        #     self._new_select.file_path = "/samples/additions.xlsx"
 
         self._col_key = EntryWithLabel(root, 2, "Column Key")
         self._col_key.entry_text = Config.get(ConfigProperty.COLUMN_KEY)
-        if __debug__ and self._col_key.entry_text == "":
-            self._col_key.entry_text = "Opportunity Id"
 
         # self._sheet_name = EntryWithLabel(root, 3, "Worksheet Name to Merge")
         # if __debug__:
@@ -70,7 +69,8 @@ class MergerGUI(Frame):
                 ConfigProperty.ORIGINAL_PATH: self._main_select.file_path,
                 ConfigProperty.COLUMN_KEY: self._col_key.entry_text,
                 ConfigProperty.REPLACE_ORIGINAL: self._replace_orig_check.checked,
-                ConfigProperty.MERGED_FILENAME: self._replace_orig_check.entry_text
+                ConfigProperty.MERGED_FILENAME: self._replace_orig_check.entry_text,
+                ConfigProperty.INITIAL_DIR: _initial_dir,
             })
             merge_spreadsheets(self._main_select.file_path,
                                self._new_select.file_path,

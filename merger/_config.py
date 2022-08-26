@@ -17,6 +17,7 @@ class ConfigProperty(Enum):
     SHEET_NAME = _ConfigPropValueWrapper("Manager_Opportunity_Dashboard")
     REPLACE_ORIGINAL = _ConfigPropValueWrapper(True)
     MERGED_FILENAME = _ConfigPropValueWrapper("")
+    INITIAL_DIR = _ConfigPropValueWrapper("./")
 
     def __str__(self):
         return self.name

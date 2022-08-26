@@ -1,4 +1,4 @@
-from merger.__main__ import main
+from merger import app
 
 if __name__ == "__main__":
-    main()
+    app.init()
