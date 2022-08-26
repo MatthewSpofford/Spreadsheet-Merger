@@ -3,8 +3,8 @@ from tkinter import *
 from tkinter import messagebox
 
 import merger
-from ._gui.loading_screen import LoadingScreen
 from ._gui.merge_config import MergeConfig
+
 
 root = Tk()
 
@@ -37,6 +37,6 @@ def after(ms: int, func):
     root.after(ms, func)
 
 
-def display_error(title: str, e: Exception):
+def display_error(title: str, e: BaseException):
     logging.exception(title)
     messagebox.showerror(title, str(e))

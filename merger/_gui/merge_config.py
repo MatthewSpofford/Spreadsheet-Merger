@@ -4,7 +4,7 @@ from tkinter import filedialog, messagebox
 from tkinter.ttk import *
 
 from merger import app
-from merger._gui.loading_screen import LoadingScreen
+from merger._gui import loading_screen
 from merger._config import Config, ConfigProperty
 from merger.merger import NonblockingMerger
 
@@ -85,7 +85,7 @@ class MergeConfig(Frame):
                                        # self._sheet_name.entry_text,
                                        self._replace_orig_check.entry_text,)
 
-            app.switch_frames(LoadingScreen, merger)
+            app.switch_frames(loading_screen.LoadingScreen, merger)
         except BaseException as e:
             app.display_error("Merge Configuration Error", e)
             return
