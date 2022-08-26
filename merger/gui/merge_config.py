@@ -4,29 +4,36 @@ from tkinter import *
 from tkinter import filedialog, messagebox
 from tkinter.ttk import *
 
+from merger import app
+from merger.gui.loading_screen import LoadingScreen
 from merger.merger import merge_spreadsheets
 from merger._config import Config, ConfigProperty
 
 _initial_dir = Config.get(ConfigProperty.INITIAL_DIR)
 _column_width = 3
+_row_height = 6
 
 
-class MergerGUI(Frame):
+class MergeConfig(Frame):
     def __init__(self, root):
         super().__init__(root, padding=("20", "20", "20", "20"))
+
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
         self._root = root
         self._root.bind("<Return>", self.merge_spreadsheets)
 
-        self._main_select = SpreadsheetSelect(root, 0, "Original Spreadsheet")
+        self._main_select = SpreadsheetSelect(self, 0, "Original Spreadsheet")
         self._main_select.file_path = Config.get(ConfigProperty.ORIGINAL_PATH)
         if __debug__ and self._main_select.file_path == "":
             self._main_select.file_path = "/samples/main.xlsx"
 
-        self._new_select = SpreadsheetSelect(root, 1, "Appending Spreadsheet")
+        self._new_select = SpreadsheetSelect(self, 1, "Appending Spreadsheet")
         # if __debug__:
         #     self._new_select.file_path = "/samples/additions.xlsx"
 
-        self._col_key = EntryWithLabel(root, 2, "Column Key")
+        self._col_key = EntryWithLabel(self, 2, "Column Key")
         self._col_key.entry_text = Config.get(ConfigProperty.COLUMN_KEY)
 
         # self._sheet_name = EntryWithLabel(root, 3, "Worksheet Name to Merge")
@@ -34,15 +41,15 @@ class MergerGUI(Frame):
         #     self._sheet_name.entry_text = "Manager_Opportunity_Dashboard"
         # self._sheet_name.entry_text = Config.get(Property.sheet_name)
 
-        self._replace_orig_check = CheckToHideEntry(root,
+        self._replace_orig_check = CheckToHideEntry(self,
                                                     "Replace original spreadsheet after merge",
                                                     "Merged Spreadsheet Name")
         self._replace_orig_check.grid(column=0, row=4, columnspan=_column_width)
         self._replace_orig_check.checked = Config.get(ConfigProperty.REPLACE_ORIGINAL)
         self._replace_orig_check.entry_text = Config.get(ConfigProperty.MERGED_FILENAME)
 
-        self._merge_btn = Button(root, text="Merge", command=self.merge_spreadsheets)
-        self._merge_btn.grid(column=0, row=5, columnspan=_column_width, padx=20, pady=10)
+        self._merge_btn = Button(self, text="Merge", command=self.merge_spreadsheets)
+        self._merge_btn.grid(column=0, row=5, columnspan=_column_width, padx=120, pady=10, sticky="nsew")
 
     def merge_spreadsheets(self):
         # Validate file selector input for all selections
@@ -72,14 +79,15 @@ class MergerGUI(Frame):
                 ConfigProperty.MERGED_FILENAME: self._replace_orig_check.entry_text,
                 ConfigProperty.INITIAL_DIR: _initial_dir,
             })
-            merge_spreadsheets(self._main_select.file_path,
-                               self._new_select.file_path,
-                               self._col_key.entry_text,
-                               # self._sheet_name.entry_text,
-                               self._replace_orig_check.entry_text)
-
-
-            messagebox.showinfo("Merge Complete", "Spreadsheets merged successfully!")
+            # merge_spreadsheets(self._main_select.file_path,
+            #                    self._new_select.file_path,
+            #                    self._col_key.entry_text,
+            #                    # self._sheet_name.entry_text,
+            #                    self._replace_orig_check.entry_text)
+            #
+            #
+            # messagebox.showinfo("Merge Complete", "Spreadsheets merged successfully!")
+            app.switch_frame(LoadingScreen)
         except BaseException as e:
             logging.exception("Merge exception!")
             messagebox.showerror("Merge Exception", str(e))
@@ -88,23 +96,18 @@ class MergerGUI(Frame):
 
 class SpreadsheetSelect:
     def __init__(self, root, row, label_text: str, overwrite_init_dir=True):
-        # super().__init__(root)
-
-        # self.columnconfigure(2, weight=1)
-        # self.rowconfigure(0, weight=1)
-
         self.label_text = label_text
 
         self._label = Label(root, text=self.label_text + ":")
-        self._label.grid(column=0, row=row, padx=20, pady=15)
+        self._label.grid(column=0, row=row, padx=20, pady=15, sticky="nse")
 
         self._file_path = StringVar()
         self._file_path_entry = Entry(root, textvariable=self._file_path)
         self._file_path_entry.grid(column=1, columnspan=_column_width - 2,
-                                   row=row, padx=0, pady=15)
+                                   row=row, padx=0, pady=15, sticky="nsew")
 
         self._select_btn = Button(root, text="Select...", command=self._select_file)
-        self._select_btn.grid(column=_column_width - 1, row=row, padx=20, pady=15)
+        self._select_btn.grid(column=_column_width - 1, row=row, padx=20, pady=15, sticky="nsew")
 
         self._overwrite_init_dir = overwrite_init_dir
 
@@ -132,12 +135,12 @@ class SpreadsheetSelect:
 class EntryWithLabel:
     def __init__(self, root, row: int, label_text: str):
         self._col_key_label = Label(root, text=f"{label_text}:")
-        self._col_key_label.grid(column=0, row=row, padx=20, pady=15)
+        self._col_key_label.grid(column=0, row=row, padx=20, pady=15, sticky="nse")
 
         self._entry_text = StringVar()
         self._entry = Entry(root, textvariable=self._entry_text)
         self._entry.grid(column=1, columnspan=_column_width - 1,
-                         row=row, padx=0, pady=15)
+                         row=row, padx=20, pady=15, sticky="nsew")
 
     @property
     def entry_text(self) -> str:
@@ -160,10 +163,12 @@ class CheckToHideEntry(Frame):
         This function takes a bool as a parameter.
         """
         super().__init__(root, padding=("20", "20", "20", "20"), relief="solid")
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
 
         self._check_state = IntVar(value=int(check_state))
         self._check = Checkbutton(self, variable=self._check_state, text=check_label_text, command=self._check_handler)
-        self._check.grid(column=0, row=0, columnspan=_column_width)
+        self._check.grid(column=0, row=0, columnspan=_column_width, sticky="ns")
 
         self._entry = EntryWithLabel(self, 1, entry_label)
 
