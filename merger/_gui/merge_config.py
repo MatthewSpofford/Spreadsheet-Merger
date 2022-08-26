@@ -12,6 +12,8 @@ _initial_dir = Config.get(ConfigProperty.INITIAL_DIR)
 _column_width = 3
 _row_height = 6
 
+_new_file_path = None
+
 
 class MergeConfig(Frame):
     def __init__(self, root):
@@ -26,11 +28,12 @@ class MergeConfig(Frame):
         self._main_select = SpreadsheetSelect(self, 0, "Original Spreadsheet")
         self._main_select.file_path = Config.get(ConfigProperty.ORIGINAL_PATH)
         if __debug__ and self._main_select.file_path == "":
-            self._main_select.file_path = "/samples/main.xlsx"
+            self._main_select.file_path = "./samples/main.xlsx"
 
         self._new_select = SpreadsheetSelect(self, 1, "Appending Spreadsheet")
-        # if __debug__:
-        #     self._new_select.file_path = "/samples/additions.xlsx"
+        self._new_select.file_path = _new_file_path
+        if __debug__:
+            self._new_select.file_path = "./samples/additions.xlsx"
 
         self._col_key = EntryWithLabel(self, 2, "Column Key")
         self._col_key.entry_text = Config.get(ConfigProperty.COLUMN_KEY)
@@ -58,10 +61,7 @@ class MergeConfig(Frame):
 
             # Output error if file path is invalid and cancel merge
             if not os.path.isfile(select.file_path):
-                messagebox.showerror("Merge Error",
-                                     "The file path given for the " + select.label_text.lower()
-                                     + " is not a valid path.")
-                return
+                raise Exception("The file path given for the " + select.label_text.lower() + " is not a valid path.")
 
         # Begin spreadsheet merging process
         try:
@@ -79,8 +79,11 @@ class MergeConfig(Frame):
                 ConfigProperty.INITIAL_DIR: _initial_dir,
             })
 
+            global _new_file_path
+            _new_file_path = self._new_select.file_path
+
             merger = NonblockingMerger(self._main_select.file_path,
-                                       self._new_select.file_path,
+                                       _new_file_path,
                                        self._col_key.entry_text,
                                        # self._sheet_name.entry_text,
                                        self._replace_orig_check.entry_text,)
