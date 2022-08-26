@@ -1,8 +1,8 @@
 from tkinter import *
 
 import merger
-from merger.gui.loading_screen import LoadingScreen
-from merger.gui.merge_config import MergeConfig
+from ._gui.loading_screen import LoadingScreen
+from ._gui.merge_config import MergeConfig
 
 root = Tk()
 
@@ -14,7 +14,7 @@ def init():
     root.grid_columnconfigure(0, weight=1)
     root.grid_rowconfigure(0, weight=1)
 
-    switch_frame(LoadingScreen)
+    switch_frame(MergeConfig)
 
     root.mainloop()
 
@@ -29,4 +29,3 @@ def switch_frame(new_frame, *additional_params):
 
     gui: Frame = new_frame(root, *additional_params)
     gui.grid(sticky="nsew")
-    # gui.anchor("center")

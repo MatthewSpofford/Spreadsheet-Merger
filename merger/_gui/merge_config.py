@@ -5,8 +5,7 @@ from tkinter import filedialog, messagebox
 from tkinter.ttk import *
 
 from merger import app
-from merger.gui.loading_screen import LoadingScreen
-from merger.merger import merge_spreadsheets
+from merger._gui.loading_screen import LoadingScreen
 from merger._config import Config, ConfigProperty
 
 _initial_dir = Config.get(ConfigProperty.INITIAL_DIR)
@@ -79,15 +78,14 @@ class MergeConfig(Frame):
                 ConfigProperty.MERGED_FILENAME: self._replace_orig_check.entry_text,
                 ConfigProperty.INITIAL_DIR: _initial_dir,
             })
-            # merge_spreadsheets(self._main_select.file_path,
-            #                    self._new_select.file_path,
-            #                    self._col_key.entry_text,
-            #                    # self._sheet_name.entry_text,
-            #                    self._replace_orig_check.entry_text)
-            #
-            #
-            # messagebox.showinfo("Merge Complete", "Spreadsheets merged successfully!")
-            app.switch_frame(LoadingScreen)
+
+            messagebox.showinfo("Merge Complete", "Spreadsheets merged successfully!")
+            app.switch_frame(LoadingScreen,
+                             self._main_select.file_path,
+                             self._new_select.file_path,
+                             self._col_key.entry_text,
+                             # self._sheet_name.entry_text,
+                             self._replace_orig_check.entry_text,)
         except BaseException as e:
             logging.exception("Merge exception!")
             messagebox.showerror("Merge Exception", str(e))

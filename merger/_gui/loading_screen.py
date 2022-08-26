@@ -34,3 +34,5 @@ class LoadingScreen(Frame):
         # self._continue = Button(self._btn_frame, text="Continue")
         # self._continue.config(state=DISABLED)
         # self._continue.grid(column=1, row=0, padx=5, pady=0, sticky="nsew")
+
+        self.create
