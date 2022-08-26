@@ -50,7 +50,7 @@ class MergeConfig(Frame):
         self._merge_btn = Button(self, text="Merge", command=self.merge_spreadsheets)
         self._merge_btn.grid(column=0, row=5, columnspan=_column_width, padx=120, pady=10, sticky="nsew")
 
-    def merge_spreadsheets(self):
+    def merge_spreadsheets(self, _):
         # Validate file selector input for all selections
         selectors = [self._main_select, self._new_select]
         for select in selectors:

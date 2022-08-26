@@ -11,10 +11,10 @@ from merger.merger import NonblockingMerger
 
 class LoadingScreen(Frame):
 
-    def __init__(self, root, merger: NonblockingMerger):
+    def __init__(self, root, nonblocking_merger: NonblockingMerger):
         super().__init__(root, padding=("20", "20", "20", "20"))
         self.root = root
-        self.merger = merger
+        self.merger = nonblocking_merger
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -36,13 +36,9 @@ class LoadingScreen(Frame):
         self._cancel = Button(self._btn_frame, text="Cancel", command=self.cancel)
         self._cancel.grid(column=0, row=0, padx=5, pady=0, sticky="nsew")
 
-        # self._continue = Button(self._btn_frame, text="Continue")
-        # self._continue.config(state=DISABLED)
-        # self._continue.grid(column=1, row=0, padx=5, pady=0, sticky="nsew")
-
         # Begin the nonblocking merge process
         self.merger.merge()
-        self.update_progress()
+        app.after(50, self.update_progress)
 
     def cancel(self):
         # Stop the merge process and switch back to the config menu
@@ -81,7 +77,7 @@ class LoadingScreen(Frame):
                 self.cancel()
             # Otherwise, keep polling to see if the merging process has completed
             else:
-                app.after(20, self.update_progress)
+                app.after(200, self.update_progress)
         except BaseException as e:
             self._status_text.set("Merging error occurred.")
             app.display_error("Merging Error", e)
