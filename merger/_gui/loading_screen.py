@@ -38,9 +38,14 @@ class LoadingScreen(Frame):
 
         # Begin the nonblocking merge process
         self.merger.merge()
-        app.after(50, self.update_progress)
+
+        # Create a handler to begin the status polling of the merger
+        self._update_progress_handler = app.root.after(50, self.update_progress)
 
     def cancel(self):
+        # Cancel status polling handler
+        app.root.after_cancel(self._update_progress_handler)
+
         # Stop the merge process and switch back to the config menu
         self.merger.stop()
         app.switch_frames(merge_config.MergeConfig)
@@ -77,7 +82,7 @@ class LoadingScreen(Frame):
                 self.cancel()
             # Otherwise, keep polling to see if the merging process has completed
             else:
-                app.after(200, self.update_progress)
+                self._update_progress_handler = app.root.after(200, self.update_progress)
         except BaseException as e:
             self._status_text.set("Merging error occurred.")
             app.display_error("Merging Error", e)

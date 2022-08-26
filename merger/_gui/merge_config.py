@@ -21,7 +21,7 @@ class MergeConfig(Frame):
         self.grid_columnconfigure(0, weight=1)
 
         self.root = root
-        self.root.bind("<Return>", self.merge_spreadsheets)
+        self.root.bind("<Return>", lambda key: self.merge_spreadsheets())
 
         self._main_select = SpreadsheetSelect(self, 0, "Original Spreadsheet")
         self._main_select.file_path = Config.get(ConfigProperty.ORIGINAL_PATH)
@@ -50,7 +50,7 @@ class MergeConfig(Frame):
         self._merge_btn = Button(self, text="Merge", command=self.merge_spreadsheets)
         self._merge_btn.grid(column=0, row=5, columnspan=_column_width, padx=120, pady=10, sticky="nsew")
 
-    def merge_spreadsheets(self, _):
+    def merge_spreadsheets(self):
         # Validate file selector input for all selections
         selectors = [self._main_select, self._new_select]
         for select in selectors:

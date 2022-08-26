@@ -33,10 +33,6 @@ def switch_frames(new_frame, *additional_params):
     gui.grid(sticky="nsew")
 
 
-def after(ms: int, func):
-    root.after(ms, func)
-
-
 def display_error(title: str, e: BaseException):
     logging.exception(title)
     messagebox.showerror(title, str(e))
