@@ -12,7 +12,7 @@ _initial_dir = Config.get(ConfigProperty.INITIAL_DIR)
 _column_width = 3
 _row_height = 6
 
-_new_file_path = None
+_new_file_path = ""
 
 
 class MergeConfig(Frame):
@@ -28,12 +28,12 @@ class MergeConfig(Frame):
         self._main_select = SpreadsheetSelect(self, 0, "Original Spreadsheet")
         self._main_select.file_path = Config.get(ConfigProperty.ORIGINAL_PATH)
         if __debug__ and self._main_select.file_path == "":
-            self._main_select.file_path = "./samples/main.xlsx"
+            self._main_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\sample\\main.xlsx"
 
         self._new_select = SpreadsheetSelect(self, 1, "Appending Spreadsheet")
         self._new_select.file_path = _new_file_path
-        if __debug__:
-            self._new_select.file_path = "./samples/additions.xlsx"
+        if __debug__ and self._new_select.file_path == "":
+            self._new_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\additions.xlsx"
 
         self._col_key = EntryWithLabel(self, 2, "Column Key")
         self._col_key.entry_text = Config.get(ConfigProperty.COLUMN_KEY)
@@ -54,17 +54,17 @@ class MergeConfig(Frame):
         self._merge_btn.grid(column=0, row=5, columnspan=_column_width, padx=120, pady=10, sticky="nsew")
 
     def merge_spreadsheets(self):
-        # Validate file selector input for all selections
-        selectors = [self._main_select, self._new_select]
-        for select in selectors:
-            select.file_path = select.file_path.strip()
-
-            # Output error if file path is invalid and cancel merge
-            if not os.path.isfile(select.file_path):
-                raise Exception("The file path given for the " + select.label_text.lower() + " is not a valid path.")
-
-        # Begin spreadsheet merging process
         try:
+            # Validate file selector input for all selections
+            selectors = [self._main_select, self._new_select]
+            for select in selectors:
+                select.file_path = select.file_path.strip()
+
+                # Output error if file path is invalid and cancel merge
+                if not os.path.isfile(select.file_path):
+                    raise Exception("The file path given for the " + select.label_text.lower() + " is not a valid path.")
+
+            # Validate that the merge file name is properly filled
             if not self._replace_orig_check.checked and \
                (self._replace_orig_check.entry_text is None or len(self._replace_orig_check.entry_text) == 0):
                 raise Exception("A new name for the file needs to be provided. Or, check the box to have the original "
@@ -79,6 +79,7 @@ class MergeConfig(Frame):
                 ConfigProperty.INITIAL_DIR: _initial_dir,
             })
 
+            # Save new file path for when the configuration window is viewed again
             global _new_file_path
             _new_file_path = self._new_select.file_path
 
