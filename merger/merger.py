@@ -13,18 +13,23 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 class MessageStatus(str, Enum):
     INIT = auto()
+    INDEXING = auto()
     MERGING = auto()
     SAVING = auto()
     COMPLETE = auto()
 
+    _INFO = auto()
 
+
+_indexing_scale_down = 0.3
 MessageGroup = Tuple
 f"""
-str[0] - status of the merging process, based on {MessageStatus}\n
+MessageStatus[0] - status of the merging process\n
 int[1] - current progress value (context dependent on the status string)\n
 int[2] - current maximum value that is trying to be reached (context dependent on the status string)\n
+int[3] - value to shift the current progress value by for representing the overall merge progress
+float[4] - scale down value for current progress (context dependent)
 """
-
 MessageType = Union[MessageGroup, str, Exception]
 
 
@@ -48,12 +53,12 @@ class Merger:
         self._new_sheet: Worksheet = self._new_wb.active
 
         # Locate column label positions
-        self.label_indices = self._locate_labels()
-        if self.column_key not in self.label_indices:
+        self._label_indices = self._locate_labels()
+        if self.column_key not in self._label_indices:
             raise Exception(f"The key '{self.column_key}' is not a column label in either of the spreadsheets.")
-        if self.label_indices[self.column_key].main_label_index is None:
+        if self._label_indices[self.column_key].main_label_index is None:
             raise Exception(f"The key '{self.column_key}' is not a column label in `{self.main_file_path}`.")
-        if self.label_indices[self.column_key].new_label_index is None:
+        if self._label_indices[self.column_key].new_label_index is None:
             raise Exception(f"The key '{self.column_key}' is not a column label in `{self.new_file_path}`.")
 
         # May be used later for non-blocking functionality for passing around data about the progress
@@ -64,29 +69,37 @@ class Merger:
             self._merger_conn.send(message)
 
     def merge(self):
+        import time
+        start_time = time.time()
+
         try:
-            self._update_status((MessageStatus.MERGING, 0, self._new_sheet.max_row - 1))
-            key_col_indices = self.label_indices[self.column_key]
+            self._update_status((MessageStatus.MERGING, 0, self._new_sheet.max_row - 1, self._main_sheet.max_row - 1))
+            key_col_indices = self._label_indices[self.column_key]
+
+            main_key_rows = self._map_main_keys(key_col_indices)
 
             # Find all rows in the main sheet based on the current key value in the new sheet
             new_rows = self._new_sheet.iter_rows(min_row=2, max_row=self._new_sheet.max_row)
             for new_key_row_index, new_key_row in enumerate(new_rows):
-                if __debug__:
-                    print(f"CURRENT ROW: {new_key_row[key_col_indices.new_label_index].value}")
-
-                new_key_val = str(new_key_row[key_col_indices.new_label_index].value)
-                main_key_row = self._locate_key_row(self._main_sheet, key_col_indices.main_label_index, new_key_val)
+                new_key_val = new_key_row[key_col_indices.new_label_index].value
 
                 # If a row wasn't found for this key in the main sheet, it must be new and inserted into the sheet
-                if main_key_row is None:
+                if new_key_val not in main_key_rows:
                     self._main_sheet.insert_rows(2)
-                    main_key_row = next(self._main_sheet.iter_rows(min_row=2, max_row=2, max_col=len(self.label_indices)))
+                    main_key_row = next(
+                        self._main_sheet.iter_rows(min_row=2, max_row=2, max_col=len(self._label_indices)))
+                else:
+                    main_key_row = main_key_rows[new_key_val]
 
                 # Update all previous keys in the main sheet with new sheet data
                 self._update_row(main_key_row, new_key_row)
 
                 # Send status update about completed row
-                self._update_status((MessageStatus.MERGING, new_key_row_index + 1, self._new_sheet.max_row - 1))
+                self._update_status((MessageStatus.MERGING,
+                                     new_key_row_index + 1,
+                                     self._new_sheet.max_row - 1,
+                                     (self._main_sheet.max_row - 1) * _indexing_scale_down,
+                                     1.0,))
 
             self._update_status(MessageStatus.SAVING)
 
@@ -108,6 +121,9 @@ class Merger:
         finally:
             self._clean_stop()
 
+        time_diff = time.time() - start_time
+        print(time_diff)
+
     def _clean_stop(self):
         # Close workbook files
         self._main_wb.close()
@@ -116,7 +132,6 @@ class Merger:
     class _LabelIndices(NamedTuple):
         main_label_index: int
         new_label_index: Optional[int]
-
 
     def _locate_labels(self):
         """Map column label indexes used in new sheet to the main sheet indexes"""
@@ -162,12 +177,26 @@ class Merger:
         return None
 
     def _update_row(self, main_row, new_row):
-        for indexes in self.label_indices.values():
+        for indexes in self._label_indices.values():
             # If label does not exist in the new sheet, just ignore this label
             if indexes.new_label_index is None:
                 continue
 
             main_row[indexes.main_label_index].value = new_row[indexes.new_label_index].value
+
+    def _map_main_keys(self, key_col_indices):
+        main_key_rows = {}
+        for key_row_index, key_row in enumerate(self._main_sheet.iter_rows(min_row=2)):
+            main_key_val = key_row[key_col_indices.main_label_index].value
+            main_key_rows[main_key_val] = key_row
+
+            self._update_status((MessageStatus.INDEXING,
+                                 key_row_index + 1,
+                                 self._main_sheet.max_row - 1,
+                                 0,
+                                 _indexing_scale_down))
+
+        return main_key_rows
 
 
 class NonblockingMerger(Merger):
@@ -180,12 +209,16 @@ class NonblockingMerger(Merger):
     def merge(self):
         self._merge_proc.start()
 
+    def get_max_progress(self):
+        return (self._new_sheet.max_row - 1) + (self._main_sheet.max_row - 1) * _indexing_scale_down
+
     def _start_merge(self):
         # Set up a termination handler for the new process in the case it needs to be cancelled
         def termination_handler(sig_num, stack_frame):
             print("STOPPING MERGE PROCESS")
             self._clean_stop()
             exit(1)
+
         signal.signal(signal.SIGTERM, termination_handler)
 
         # Send initialization status before merging

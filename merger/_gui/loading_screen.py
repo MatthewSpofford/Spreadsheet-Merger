@@ -20,8 +20,8 @@ class LoadingScreen(Frame):
         self.grid_columnconfigure(0, weight=1)
 
         self._progress = IntVar()
-        self._progress_bar = Progressbar(self, orient=HORIZONTAL, variable=self._progress, maximum=200,
-                                         mode="determinate")
+        self._progress_bar = Progressbar(self, orient=HORIZONTAL, variable=self._progress,
+                                         maximum=self.merger.get_max_progress())
         self._progress_bar.grid(column=0, row=0, padx=20, pady=30, sticky="nsew")
 
         self._status_text = StringVar()
@@ -50,8 +50,6 @@ class LoadingScreen(Frame):
         self.merger.stop()
         app.switch_frames(merge_config.MergeConfig)
 
-    _merging_text_prefix = "Number of Rows Completed:\n"
-
     def update_progress(self):
         try:
             status = self.merger.get_status()
@@ -66,11 +64,15 @@ class LoadingScreen(Frame):
                 }
                 self._status_text.set(status_str[status])
 
-            # Update the progress text if the merging status is currently in effect
-            if isinstance(status, merger.MessageGroup) and status[0] == merger.MessageStatus.MERGING:
-                self._status_text.set(self._merging_text_prefix + f"{status[1]}/{status[2]}")
-                self._progress_bar["maximum"] = status[2]
-                self._progress.set(status[1])
+            # Update the progress text according the grouped message data
+            if isinstance(status, merger.MessageGroup):
+                status_prefix_str = {
+                    merger.MessageStatus.INDEXING: "Indexed Rows:\n",
+                    merger.MessageStatus.MERGING: "Merged Rows:\n",
+                }
+
+                self._status_text.set(status_prefix_str[status[0]] + f"{status[1]}/{status[2]}")
+                self._progress.set((status[1] * status[4]) + status[3])
 
             # If the merge process successfully completed, notify the user
             if status == merger.MessageStatus.COMPLETE:
