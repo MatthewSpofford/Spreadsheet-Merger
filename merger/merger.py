@@ -47,10 +47,12 @@ class Merger:
         self._main_wb: Workbook = pyxl.load_workbook(self.main_file_path)
         self._main_wb.active = 0
         self._main_sheet: Worksheet = self._main_wb.active
+        self._main_max_row = self._main_sheet.max_row
 
         self._new_wb: Workbook = pyxl.load_workbook(self.new_file_path)  # , read_only=True)
         self._new_wb.active = 0
         self._new_sheet: Worksheet = self._new_wb.active
+        self._new_max_row = self._new_sheet.max_row
 
         # Locate column label positions
         self._label_indices = self._locate_labels()
@@ -69,17 +71,19 @@ class Merger:
             self._merger_conn.send(message)
 
     def merge(self):
-        import time
-        start_time = time.time()
+        import cProfile, time
+        from pstats import SortKey
 
+        start = time.time()
+        # with cProfile.Profile() as pr:
         try:
-            self._update_status((MessageStatus.MERGING, 0, self._new_sheet.max_row - 1, self._main_sheet.max_row - 1))
+            self._update_status((MessageStatus.MERGING, 0, self._new_max_row - 1, self._main_max_row - 1))
             key_col_indices = self._label_indices[self.column_key]
 
             main_key_rows = self._map_main_keys(key_col_indices)
 
             # Find all rows in the main sheet based on the current key value in the new sheet
-            new_rows = self._new_sheet.iter_rows(min_row=2, max_row=self._new_sheet.max_row)
+            new_rows = self._new_sheet.iter_rows(min_row=2, max_row=self._new_max_row)
             for new_key_row_index, new_key_row in enumerate(new_rows):
                 new_key_val = new_key_row[key_col_indices.new_label_index].value
 
@@ -97,8 +101,8 @@ class Merger:
                 # Send status update about completed row
                 self._update_status((MessageStatus.MERGING,
                                      new_key_row_index + 1,
-                                     self._new_sheet.max_row - 1,
-                                     (self._main_sheet.max_row - 1) * _indexing_scale_down,
+                                     self._new_max_row - 1,
+                                     (self._main_max_row - 1) * _indexing_scale_down,
                                      1.0,))
 
             self._update_status(MessageStatus.SAVING)
@@ -121,8 +125,8 @@ class Merger:
         finally:
             self._clean_stop()
 
-        time_diff = time.time() - start_time
-        print(time_diff)
+        print(time.time() - start)
+        # pr.print_stats(SortKey.TIME)
 
     def _clean_stop(self):
         # Close workbook files
@@ -192,7 +196,7 @@ class Merger:
 
             self._update_status((MessageStatus.INDEXING,
                                  key_row_index + 1,
-                                 self._main_sheet.max_row - 1,
+                                 self._main_max_row - 1,
                                  0,
                                  _indexing_scale_down))
 
@@ -210,7 +214,7 @@ class NonblockingMerger(Merger):
         self._merge_proc.start()
 
     def get_max_progress(self):
-        return (self._new_sheet.max_row - 1) + (self._main_sheet.max_row - 1) * _indexing_scale_down
+        return (self._new_max_row - 1) + (self._main_max_row - 1) * _indexing_scale_down
 
     def _start_merge(self):
         # Set up a termination handler for the new process in the case it needs to be cancelled
