@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 from tkinter import *
 from tkinter import messagebox
 
@@ -10,6 +11,8 @@ root = Tk()
 
 
 def init():
+    multiprocessing.freeze_support()
+
     root.title(f"Spreadsheet Merger (v{merger.__version__})")
     root.minsize(width=400, height=200)
     root.resizable(width=False, height=False)
@@ -18,7 +21,13 @@ def init():
 
     switch_frames(MergeConfig)
 
-    root.mainloop()
+    try:
+        root.mainloop()
+    except KeyboardInterrupt:
+        for child in multiprocessing.process.active_children():
+            child.terminate()
+            child.join()
+        exit(0)
 
 
 def switch_frames(new_frame, *additional_params):

@@ -1,5 +1,6 @@
 import os
 import signal
+from copy import copy
 from enum import Enum, auto
 from multiprocessing import Process, Pipe
 from multiprocessing.dummy.connection import Connection
@@ -8,7 +9,9 @@ from typing import Optional, NamedTuple, Union, get_args, Tuple
 import openpyxl as pyxl
 import openpyxl.writer.excel
 from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.worksheet import Worksheet
+from openpyxl.cell.cell import Cell
 
 
 class MessageStatus(str, Enum):
@@ -54,6 +57,9 @@ class Merger:
         self._new_sheet: Worksheet = self._new_wb.active
         self._new_max_row = self._new_sheet.max_row
 
+        # Close workbooks, the files no longer need to stay open
+        self._clean_stop()
+
         # Locate column label positions
         self._label_indices = self._locate_labels()
         if self.column_key not in self._label_indices:
@@ -63,6 +69,9 @@ class Merger:
         if self._label_indices[self.column_key].new_label_index is None:
             raise Exception(f"The key '{self.column_key}' is not a column label in `{self.new_file_path}`.")
 
+        # Locate first row of data to use for formatting later
+        self._format_row: Tuple[Cell] = next(self._main_sheet.iter_rows(min_row=2, max_row=2))
+
         # May be used later for non-blocking functionality for passing around data about the progress
         self._merger_conn: Optional[Connection] = None
 
@@ -71,16 +80,16 @@ class Merger:
             self._merger_conn.send(message)
 
     def merge(self):
-        import cProfile, time
-        from pstats import SortKey
-
-        start = time.time()
+        # import cProfile, time
+        # from pstats import SortKey
+        #
+        # start = time.time()
         # with cProfile.Profile() as pr:
         try:
             self._update_status((MessageStatus.MERGING, 0, self._new_max_row - 1, self._main_max_row - 1))
             key_col_indices = self._label_indices[self.column_key]
 
-            main_key_rows = self._map_main_keys(key_col_indices)
+            key_rows = self._map_main_keys(key_col_indices)
 
             # Find all rows in the main sheet based on the current key value in the new sheet
             new_rows = self._new_sheet.iter_rows(min_row=2, max_row=self._new_max_row)
@@ -88,12 +97,13 @@ class Merger:
                 new_key_val = new_key_row[key_col_indices.new_label_index].value
 
                 # If a row wasn't found for this key in the main sheet, it must be new and inserted into the sheet
-                if new_key_val not in main_key_rows:
+                if new_key_val not in key_rows:
                     self._main_sheet.insert_rows(2)
-                    main_key_row = next(
-                        self._main_sheet.iter_rows(min_row=2, max_row=2, max_col=len(self._label_indices)))
+                    main_key_row = next(self._main_sheet.iter_rows(min_row=2, max_row=2))
+
+                    self._update_row_formatting(main_key_row)
                 else:
-                    main_key_row = main_key_rows[new_key_val]
+                    main_key_row = key_rows[new_key_val]
 
                 # Update all previous keys in the main sheet with new sheet data
                 self._update_row(main_key_row, new_key_row)
@@ -125,7 +135,7 @@ class Merger:
         finally:
             self._clean_stop()
 
-        print(time.time() - start)
+        # print(time.time() - start)
         # pr.print_stats(SortKey.TIME)
 
     def _clean_stop(self):
@@ -166,28 +176,6 @@ class Merger:
 
         return label_indices
 
-    # TODO Make sure that the _locate_row_key or whatever it's called doesn't always start at 2,
-    #      because that can shift if a new row is inserted over time, and we can make it a bit more optimal
-    @staticmethod
-    def _locate_key_row(sheet: pyxl.workbook.workbook.Worksheet,
-                        column_key_index: int, key_value: str) -> Optional[int]:
-        """Using the given key value, output the row data it is located on within the key
-        column of the given worksheet"""
-        for possible_key_row in sheet.iter_rows(min_row=2, max_row=sheet.max_row):
-            if str(possible_key_row[column_key_index].value) == key_value:
-                return possible_key_row
-
-        # The given key wasn't found
-        return None
-
-    def _update_row(self, main_row, new_row):
-        for indexes in self._label_indices.values():
-            # If label does not exist in the new sheet, just ignore this label
-            if indexes.new_label_index is None:
-                continue
-
-            main_row[indexes.main_label_index].value = new_row[indexes.new_label_index].value
-
     def _map_main_keys(self, key_col_indices):
         main_key_rows = {}
         for key_row_index, key_row in enumerate(self._main_sheet.iter_rows(min_row=2)):
@@ -201,6 +189,27 @@ class Merger:
                                  _indexing_scale_down))
 
         return main_key_rows
+
+    def _update_row(self, main_row: Tuple[Cell], new_row: Tuple[Cell]):
+        for indexes in self._label_indices.values():
+            # If label does not exist in the new sheet, just ignore this label
+            if indexes.new_label_index is None:
+                continue
+
+            main_row[indexes.main_label_index].value = new_row[indexes.new_label_index].value
+
+    def _update_row_formatting(self, row: Tuple[Cell]):
+        for cell_index, cell in enumerate(row):
+            format_cell: Cell = self._format_row[cell_index]
+
+            cell.font = copy(format_cell.font)
+            cell.fill = copy(format_cell.fill)
+            cell.border = copy(format_cell.border)
+            cell.number_format = copy(format_cell.number_format)
+            cell.protection = copy(format_cell.protection)
+            cell.alignment = copy(format_cell.alignment)
+            cell.quotePrefix = copy(format_cell.quotePrefix)
+            cell.pivotButton = copy(format_cell.pivotButton)
 
 
 class NonblockingMerger(Merger):
@@ -218,7 +227,7 @@ class NonblockingMerger(Merger):
 
     def _start_merge(self):
         # Set up a termination handler for the new process in the case it needs to be cancelled
-        def termination_handler(sig_num, stack_frame):
+        def termination_handler(*_):
             print("STOPPING MERGE PROCESS")
             self._clean_stop()
             exit(1)
