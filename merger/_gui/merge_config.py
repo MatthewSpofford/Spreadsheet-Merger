@@ -15,6 +15,14 @@ _row_height = 6
 _new_file_path = ""
 
 
+ORIGINAL_SPREADSHEET_LABEL = "Original Spreadsheet"
+APPENDING_SPREADSHEET_LABEL = "Appending Spreadsheet"
+COLUMN_KEY_LABEL = "ID Column"
+REPLACE_ORIG_LABEL = "Replace original spreadsheet after merge"
+NEW_SPREADSHEET_LABEL = "Merged Spreadsheet Name"
+MERGE_BTN_LABEL = "Merge"
+
+
 class MergeConfig(Frame):
     def __init__(self, root):
         super().__init__(root, padding=("20", "20", "20", "20"))
@@ -25,17 +33,17 @@ class MergeConfig(Frame):
         self.root = root
         self.root.bind("<Return>", lambda key: self.merge_spreadsheets())
 
-        self._main_select = SpreadsheetSelect(self, 0, "Original Spreadsheet")
+        self._main_select = SpreadsheetSelect(self, 0, ORIGINAL_SPREADSHEET_LABEL)
         self._main_select.file_path = Config.get(ConfigProperty.ORIGINAL_PATH)
         if __debug__ and self._main_select.file_path == "":
             self._main_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\sample\\main.xlsx"
 
-        self._new_select = SpreadsheetSelect(self, 1, "Appending Spreadsheet")
+        self._new_select = SpreadsheetSelect(self, 1, APPENDING_SPREADSHEET_LABEL)
         self._new_select.file_path = _new_file_path
         if __debug__ and self._new_select.file_path == "":
             self._new_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\additions.xlsx"
 
-        self._col_key = EntryWithLabel(self, 2, "Column Key")
+        self._col_key = EntryWithLabel(self, 2, COLUMN_KEY_LABEL)
         self._col_key.entry_text = Config.get(ConfigProperty.COLUMN_KEY)
 
         # self._sheet_name = EntryWithLabel(root, 3, "Worksheet Name to Merge")
@@ -43,14 +51,12 @@ class MergeConfig(Frame):
         #     self._sheet_name.entry_text = "Manager_Opportunity_Dashboard"
         # self._sheet_name.entry_text = Config.get(Property.sheet_name)
 
-        self._replace_orig_check = CheckToHideEntry(self,
-                                                    "Replace original spreadsheet after merge",
-                                                    "Merged Spreadsheet Name")
+        self._replace_orig_check = CheckToHideEntry(self, REPLACE_ORIG_LABEL, NEW_SPREADSHEET_LABEL)
         self._replace_orig_check.grid(column=0, row=4, columnspan=_column_width)
         self._replace_orig_check.checked = Config.get(ConfigProperty.REPLACE_ORIGINAL)
         self._replace_orig_check.entry_text = Config.get(ConfigProperty.MERGED_FILENAME)
 
-        self._merge_btn = Button(self, text="Merge", command=self.merge_spreadsheets)
+        self._merge_btn = Button(self, text=MERGE_BTN_LABEL, command=self.merge_spreadsheets)
         self._merge_btn.grid(column=0, row=5, columnspan=_column_width, padx=120, pady=10, sticky="nsew")
 
     def merge_spreadsheets(self):
@@ -62,7 +68,8 @@ class MergeConfig(Frame):
 
                 # Output error if file path is invalid and cancel merge
                 if not os.path.isfile(select.file_path):
-                    raise Exception("The file path given for the " + select.label_text.lower() + " is not a valid path.")
+                    raise Exception("The file path given for the " + select.label_text.lower() + " is not a valid"
+                                    "path.")
 
             # Validate that the merge file name is properly filled
             if not self._replace_orig_check.checked and \
@@ -95,7 +102,11 @@ class MergeConfig(Frame):
             return
 
 
+
+
 class SpreadsheetSelect:
+    SELECT_SPREADSHEET_TITLE = "Select Spreadsheet"
+
     def __init__(self, root, row, label_text: str, overwrite_init_dir=True):
         self.label_text = label_text
 
@@ -114,7 +125,7 @@ class SpreadsheetSelect:
 
     def _select_file(self):
         self.file_path = filedialog.askopenfilename(filetypes=[("Excel Spreadsheet", ".xlsx")],
-                                                    title="Select Spreadsheet",
+                                                    title=self.SELECT_SPREADSHEET_TITLE,
                                                     initialdir=_initial_dir)
 
     @property

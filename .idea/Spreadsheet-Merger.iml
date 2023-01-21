@@ -5,6 +5,7 @@
       <sourceFolder url="file://$MODULE_DIR$/merger" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
       <excludeFolder url="file://$MODULE_DIR$/samples" />
+      <excludeFolder url="file://$MODULE_DIR$/.github" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.8 (Spreadsheet-Merger)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

@@ -6,6 +6,9 @@ from types import DynamicClassAttribute
 from typing import Union, Dict
 
 
+_CONFIG_FILE_PATH = os.path.join(Path.home(), "spreadsheet-merger.ini")
+
+
 class _ConfigPropValueWrapper:
     def __init__(self, value):
         self.value = value
@@ -35,7 +38,7 @@ class ConfigProperty(Enum):
 
 
 class Config:
-    _config_file_location = os.path.join(Path.home(), "spreadsheet-merger.ini")
+    _config_file_location = _CONFIG_FILE_PATH
 
     _DEFAULT_SECTION = "DEFAULT"
     _DEFAULT_VALUES = ConfigProperty.generate_default_value_dict()

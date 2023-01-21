@@ -9,7 +9,6 @@ from typing import Optional, NamedTuple, Union, get_args, Tuple
 import openpyxl as pyxl
 import openpyxl.writer.excel
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.cell.cell import Cell
 
