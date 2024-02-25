@@ -1,11 +1,11 @@
+import traceback
 from tkinter import *
 from tkinter import messagebox
 from tkinter.ttk import *
 
-from _gui import error_message
 from merger import app
-from merger._gui import merge_config
-from nonblocking_merger import NonblockingMerger, MergeStatus, MergeMessage
+from merger._gui import error_message, merge_config
+from merger.nonblocking_merger import NonblockingMerger, MergeStatus, MergeMessage
 
 PROGRESS_STATUS_DELAY_MS = 50
 
@@ -75,7 +75,7 @@ class LoadingScreen(Frame):
 
             # Keep polling to see if the merging process has completed
             self._update_progress_handler = app.root.after(PROGRESS_STATUS_DELAY_MS, self.update_progress)
-        except BaseException as e:
+        except BaseException:
             self._status_text.set("Merging error occurred.")
-            error_message.display_fatal_error("Merging Error", e)
+            error_message.display_fatal_error("Merging Error", traceback.format_exc())
             self.cancel()

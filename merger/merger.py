@@ -10,7 +10,7 @@ from openpyxl.comments import Comment
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.cell.cell import Cell
 
-from exceptions import MergeException
+from merger.exceptions import MergeException
 
 
 class Merger:
@@ -94,7 +94,7 @@ class Merger:
 
             # Add a comment in the first cell of the sheet to indicate the date the sheet was modified
             modified_time_str = datetime.now().strftime("%A %B %d %Y, %I:%M%p")
-            self._original_sheet["A1"].comment = Comment(f"Last Updated Time:\n{modified_time_str}",
+            self._original_sheet["A1"].comment = Comment(f"Last Time Merged:\n{modified_time_str}",
                                                          "Spreadsheet Merger")
 
             # Creates a copy

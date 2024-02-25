@@ -1,15 +1,15 @@
 import os
+import traceback
 from pathlib import Path
 from tkinter import *
 from tkinter import filedialog
 from tkinter.ttk import *
 
-from _gui import error_message
-from exceptions import MergeException
 from merger import app
-from merger._gui import loading_screen
+from merger.exceptions import MergeException
+from merger._gui import loading_screen, error_message
 from merger._config import Config, ConfigProperty
-from nonblocking_merger import NonblockingMerger
+from merger.nonblocking_merger import NonblockingMerger
 
 _COLUMN_WIDTH = 3
 _ROW_HEIGHT = 6
@@ -103,8 +103,8 @@ class MergeConfig(Frame):
             error_message.display_error("Merge Configuration Error", e)
             app.switch_frames(MergeConfig)
             return
-        except BaseException as e:
-            error_message.display_fatal_error("Merge Configuration Failure", e)
+        except BaseException:
+            error_message.display_fatal_error("Merge Configuration Failure", traceback.format_exc())
             app.switch_frames(MergeConfig)
             return
 

@@ -1,1 +1,10 @@
+altgraph==0.17.4
+et-xmlfile==1.1.0
+importlib-metadata==7.0.1
 openpyxl==3.0.10
+packaging==23.2
+pefile==2023.2.7
+pyinstaller==6.4.0
+pyinstaller-hooks-contrib==2024.1
+pywin32-ctypes==0.2.2
+zipp==3.17.0

@@ -11,7 +11,10 @@ root = Tk()
 def init():
     multiprocessing.freeze_support()
 
-    root.title(f"Spreadsheet Merger (v{merger.__version__})")
+    title_str = f"Spreadsheet Merger (v{merger.__version__})"
+    if __debug__:
+        title_str += " === DEBUG BUILD ==="
+    root.title(title_str)
     root.minsize(width=400, height=200)
     root.resizable(width=False, height=False)
     root.grid_columnconfigure(0, weight=1)

@@ -1,6 +1,7 @@
 import logging
 import signal
 import sys
+import traceback
 from dataclasses import dataclass
 from enum import Enum, auto
 from multiprocessing import Pipe, Process
@@ -34,8 +35,11 @@ class MergeMessage:
 
 
 MessageType = Union[MergeMessage, tuple]
-"""Tuple only used if an exception is raised. It follows the structure of sys.exc_inf() 
-(https://docs.python.org/3/library/sys.html#sys.exc_info)"""
+"""
+Tuple only used if an exception is raised. It follows the structure of sys.exc_info() 
+(https://docs.python.org/3/library/sys.html#sys.exc_info), except that the traceback has been converted to a formatted
+string
+"""
 
 
 class NonblockingMerger(Merger):
@@ -126,7 +130,9 @@ class NonblockingMerger(Merger):
             MergeMessage(MergeStatus.COMPLETE, self.max_progress, "Saving merged file..."))
 
     def _hook_exception(self):
-        self._update_status(sys.exc_info())
+        exc_info = list(sys.exc_info())
+        exc_info[2] = traceback.format_exc()
+        self._update_status(tuple(exc_info))
 
     def stop(self):
         if self._merge_proc.is_alive():
@@ -149,6 +155,6 @@ class NonblockingMerger(Merger):
         # Tuple follows the structure of sys.exc_inf() (https://docs.python.org/3/library/sys.html#sys.exc_info)
         if isinstance(message, tuple):
             exc_type, exc, exc_traceback = message
-            raise exc from exc
+            raise Exception(f"Failure occurred during merge: {exc}:\n\n{exc_traceback}")
 
         return message
