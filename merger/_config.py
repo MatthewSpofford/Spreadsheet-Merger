@@ -1,12 +1,8 @@
-import os
 from configparser import ConfigParser
 from enum import Enum
 from pathlib import Path
 from types import DynamicClassAttribute
 from typing import Union, Dict
-
-
-_CONFIG_FILE_PATH = os.path.join(Path.home(), "spreadsheet-merger.ini")
 
 
 class _ConfigPropValueWrapper:
@@ -38,12 +34,13 @@ class ConfigProperty(Enum):
 
 
 class Config:
-    _config_file_location = _CONFIG_FILE_PATH
+    _config_file_location = Path.home().joinpath("spreadsheet-merger.ini")
 
-    _DEFAULT_SECTION = "DEFAULT"
-    _DEFAULT_VALUES = ConfigProperty.generate_default_value_dict()
+    _SETTINGS_SECTION = "DEFAULT"
 
-    cp = ConfigParser(defaults=_DEFAULT_VALUES, default_section=_DEFAULT_SECTION, allow_no_value=True)
+    config_parser = ConfigParser(defaults=ConfigProperty.generate_default_value_dict(),
+                                 default_section=_SETTINGS_SECTION,
+                                 allow_no_value=True)
 
     _initialized = False
 
@@ -52,25 +49,25 @@ class Config:
         if cls._initialized:
            return
 
-        cls.cp.read(cls._config_file_location)
+        cls.config_parser.read(cls._config_file_location)
         cls._initialized = True
 
     @classmethod
     def get(cls, prop: ConfigProperty):
         cls._init()
         if isinstance(prop.value, bool):
-            return cls.cp[cls._DEFAULT_SECTION].getboolean(str(prop))
+            return cls.config_parser[cls._SETTINGS_SECTION].getboolean(str(prop))
         else:
-            return prop.value.__class__(cls.cp[cls._DEFAULT_SECTION][str(prop)])
+            return prop.value.__class__(cls.config_parser[cls._SETTINGS_SECTION][str(prop)])
 
     @classmethod
     def set(cls, prop: Union[ConfigProperty, Dict[ConfigProperty, str]], value=None):
         cls._init()
         if isinstance(prop, ConfigProperty) and value is not None:
-            cls.cp[cls._DEFAULT_SECTION][str(prop)] = str(value)
+            cls.config_parser[cls._SETTINGS_SECTION][str(prop)] = str(value)
         elif isinstance(prop, dict):
             for prop_name, prop_value in prop.items():
-                cls.cp[cls._DEFAULT_SECTION][str(prop_name)] = str(prop_value)
+                cls.config_parser[cls._SETTINGS_SECTION][str(prop_name)] = str(prop_value)
         else:
             raise ValueError(f"{prop} can only be of type {ConfigProperty}, with a given value as input, or {dict}.")
 
@@ -80,4 +77,4 @@ class Config:
     def save(cls):
         # Write new configuration file
         with open(cls._config_file_location, "w") as config_file:
-            cls.cp.write(config_file)
+            cls.config_parser.write(config_file)

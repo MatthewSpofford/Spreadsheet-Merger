@@ -2,14 +2,19 @@ from tkinter import *
 from tkinter import messagebox
 from tkinter.ttk import *
 
-import merger.merger
+from _gui import error_message
 from merger import app
-from merger import merger
 from merger._gui import merge_config
-from merger.merger import NonblockingMerger
+from nonblocking_merger import NonblockingMerger, MergeStatus, MergeMessage
+
+PROGRESS_STATUS_DELAY_MS = 50
 
 
 class LoadingScreen(Frame):
+    """
+    GUI for displaying the loading progress of the spreadsheet merger, as well as handling starting the merge, and
+    polling the merge progress
+    """
 
     def __init__(self, root, nonblocking_merger: NonblockingMerger):
         super().__init__(root, padding=("20", "20", "20", "20"))
@@ -21,7 +26,7 @@ class LoadingScreen(Frame):
 
         self._progress = IntVar()
         self._progress_bar = Progressbar(self, orient=HORIZONTAL, variable=self._progress,
-                                         maximum=self.merger.get_max_progress())
+                                         maximum=self.merger.max_progress)
         self._progress_bar.grid(column=0, row=0, padx=20, pady=30, sticky="nsew")
 
         self._status_text = StringVar()
@@ -40,7 +45,7 @@ class LoadingScreen(Frame):
         self.merger.merge()
 
         # Create a handler to begin the status polling of the merger
-        self._update_progress_handler = app.root.after(50, self.update_progress)
+        self._update_progress_handler = app.root.after(PROGRESS_STATUS_DELAY_MS, self.update_progress)
 
     def cancel(self):
         # Cancel status polling handler
@@ -52,40 +57,25 @@ class LoadingScreen(Frame):
 
     def update_progress(self):
         try:
-            status = self.merger.get_status()
+            message = self.merger.get_status()
 
-            # If only string based statuses have been sent, with no numerical values attached
-            # then update the states label accordingly
-            if isinstance(status, str):
-                status_str = {
-                    merger.MessageStatus.INIT: "Initializing merging processing...",
-                    merger.MessageStatus.SAVING: "Saving merged file...",
-                    merger.MessageStatus.COMPLETE: "Merge complete!"
-                }
-                self._status_text.set(status_str[status])
+            if isinstance(message, MergeMessage):
+                self._status_text.set(message.progress_str)
+                self._progress.set(message.progress)
 
-            # Update the progress text according the grouped message data
-            if isinstance(status, merger.MessageGroup):
-                status_prefix_str = {
-                    merger.MessageStatus.INDEXING: "Indexed Rows:\n",
-                    merger.MessageStatus.MERGING: "Merged Rows:\n",
-                }
+                # If the merge process successfully completed, notify the user
+                if message.status == MergeStatus.COMPLETE:
+                    # Set the progress bar to 100% just in case it was not completely filled
+                    self._progress.set(self._progress_bar["maximum"])
 
-                self._status_text.set(status_prefix_str[status[0]] + f"{status[1]}/{status[2]}")
-                self._progress.set((status[1] * status[4]) + status[3])
+                    # Display completion dialog box
+                    messagebox.showinfo("Merge Complete", "Spreadsheets merged successfully!")
+                    self.cancel()
+                    return
 
-            # If the merge process successfully completed, notify the user
-            if status == merger.MessageStatus.COMPLETE:
-                # Set the progress bar to 100% just in case it was not completely filled
-                self._progress.set(self._progress_bar["maximum"])
-
-                # Display completion dialog box
-                messagebox.showinfo("Merge Complete", "Spreadsheets merged successfully!")
-                self.cancel()
-            # Otherwise, keep polling to see if the merging process has completed
-            else:
-                self._update_progress_handler = app.root.after(200, self.update_progress)
+            # Keep polling to see if the merging process has completed
+            self._update_progress_handler = app.root.after(PROGRESS_STATUS_DELAY_MS, self.update_progress)
         except BaseException as e:
             self._status_text.set("Merging error occurred.")
-            app.display_error("Merging Error", e)
+            error_message.display_fatal_error("Merging Error", e)
             self.cancel()

@@ -7,7 +7,7 @@
       <excludeFolder url="file://$MODULE_DIR$/samples" />
       <excludeFolder url="file://$MODULE_DIR$/.github" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.8 (Spreadsheet-Merger)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Spreadsheet-Merger Venv" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

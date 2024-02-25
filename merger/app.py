@@ -1,7 +1,5 @@
-import logging
 import multiprocessing
 from tkinter import *
-from tkinter import messagebox
 
 import merger
 from ._gui.merge_config import MergeConfig
@@ -33,15 +31,8 @@ def init():
 def switch_frames(new_frame, *additional_params):
     root.unbind("<Return>")
 
-    # Copy the children names so that an exception isn't thrown when the list of children changes size
-    children_names = dict.fromkeys(root.children.keys()).keys()
-    for name in children_names:
+    for name in list(root.children.keys()):
         root.children[name].destroy()
 
     gui: Frame = new_frame(root, *additional_params)
     gui.grid(sticky="nsew")
-
-
-def display_error(title: str, e: BaseException):
-    logging.exception(title)
-    messagebox.showerror(title, str(e))

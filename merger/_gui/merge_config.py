@@ -1,18 +1,18 @@
 import os
+from pathlib import Path
 from tkinter import *
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 from tkinter.ttk import *
 
+from _gui import error_message
+from exceptions import MergeException
 from merger import app
 from merger._gui import loading_screen
 from merger._config import Config, ConfigProperty
-from merger.merger import NonblockingMerger
+from nonblocking_merger import NonblockingMerger
 
-_initial_dir = Config.get(ConfigProperty.INITIAL_DIR)
-_column_width = 3
-_row_height = 6
-
-_new_file_path = ""
+_COLUMN_WIDTH = 3
+_ROW_HEIGHT = 6
 
 
 ORIGINAL_SPREADSHEET_LABEL = "Original Spreadsheet"
@@ -24,6 +24,11 @@ MERGE_BTN_LABEL = "Merge"
 
 
 class MergeConfig(Frame):
+    """Starting page of the GUI for entering spreadsheet merging configuration info"""
+
+    initial_dir = Path(Config.get(ConfigProperty.INITIAL_DIR))
+    new_file_path = Path()
+
     def __init__(self, root):
         super().__init__(root, padding=("20", "20", "20", "20"))
 
@@ -39,43 +44,41 @@ class MergeConfig(Frame):
             self._main_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\sample\\main.xlsx"
 
         self._new_select = SpreadsheetSelect(self, 1, APPENDING_SPREADSHEET_LABEL)
-        self._new_select.file_path = _new_file_path
-        if __debug__ and self._new_select.file_path == "":
+        self._new_select.file_path = self.new_file_path
+        if __debug__ and self._new_select.file_path == Path():
             self._new_select.file_path = "C:\\workspace\\Spreadsheet-Merger\\samples\\additions.xlsx"
 
         self._col_key = EntryWithLabel(self, 2, COLUMN_KEY_LABEL)
         self._col_key.entry_text = Config.get(ConfigProperty.COLUMN_KEY)
 
-        # self._sheet_name = EntryWithLabel(root, 3, "Worksheet Name to Merge")
-        # if __debug__:
-        #     self._sheet_name.entry_text = "Manager_Opportunity_Dashboard"
-        # self._sheet_name.entry_text = Config.get(Property.sheet_name)
+        if __debug__:
+            self._sheet_name = EntryWithLabel(self, 3, "Worksheet Name to Merge")
+            self._sheet_name.entry_text = "Manager_Opportunity_Dashboard"
+            self._sheet_name.entry_text = Config.get(ConfigProperty.SHEET_NAME)
 
         self._replace_orig_check = CheckToHideEntry(self, REPLACE_ORIG_LABEL, NEW_SPREADSHEET_LABEL)
-        self._replace_orig_check.grid(column=0, row=4, columnspan=_column_width)
+        self._replace_orig_check.grid(column=0, row=4, columnspan=_COLUMN_WIDTH)
         self._replace_orig_check.checked = Config.get(ConfigProperty.REPLACE_ORIGINAL)
         self._replace_orig_check.entry_text = Config.get(ConfigProperty.MERGED_FILENAME)
 
         self._merge_btn = Button(self, text=MERGE_BTN_LABEL, command=self.merge_spreadsheets)
-        self._merge_btn.grid(column=0, row=5, columnspan=_column_width, padx=120, pady=10, sticky="nsew")
+        self._merge_btn.grid(column=0, row=5, columnspan=_COLUMN_WIDTH, padx=120, pady=10, sticky="nsew")
 
     def merge_spreadsheets(self):
         try:
             # Validate file selector input for all selections
             selectors = [self._main_select, self._new_select]
             for select in selectors:
-                select.file_path = select.file_path.strip()
-
                 # Output error if file path is invalid and cancel merge
-                if not os.path.isfile(select.file_path):
-                    raise Exception("The file path given for the " + select.label_text.lower() + " is not a valid"
-                                    "path.")
+                if not select.file_path.is_file():
+                    raise MergeException("The file path given for the " + select.label_text.lower() + " is not a valid"
+                                         "path.")
 
             # Validate that the merge file name is properly filled
             if not self._replace_orig_check.checked and \
                (self._replace_orig_check.entry_text is None or len(self._replace_orig_check.entry_text) == 0):
-                raise Exception("A new name for the file needs to be provided. Or, check the box to have the original "
-                                "spreadsheet be replaced")
+                raise MergeException("A new name for the file needs to be provided. Or, check the box to have the "
+                                     "original spreadsheet be replaced")
 
             # Save to the configuration file
             Config.set({
@@ -83,25 +86,27 @@ class MergeConfig(Frame):
                 ConfigProperty.COLUMN_KEY: self._col_key.entry_text,
                 ConfigProperty.REPLACE_ORIGINAL: self._replace_orig_check.checked,
                 ConfigProperty.MERGED_FILENAME: self._replace_orig_check.entry_text,
-                ConfigProperty.INITIAL_DIR: _initial_dir,
+                ConfigProperty.INITIAL_DIR: self.initial_dir,
             })
 
             # Save new file path for when the configuration window is viewed again
-            global _new_file_path
-            _new_file_path = self._new_select.file_path
+            self.new_file_path = self._new_select.file_path
 
-            merger = NonblockingMerger(self._main_select.file_path,
-                                       _new_file_path,
+            replacement_file = self._replace_orig_check.entry_text if not self._replace_orig_check.checked else None
+            merger = NonblockingMerger(Path(self._main_select.file_path),
+                                       self.new_file_path,
                                        self._col_key.entry_text,
-                                       # self._sheet_name.entry_text,
-                                       self._replace_orig_check.entry_text,)
+                                       replacement_file)
 
             app.switch_frames(loading_screen.LoadingScreen, merger)
-        except BaseException as e:
-            app.display_error("Merge Configuration Error", e)
+        except MergeException as e:
+            error_message.display_error("Merge Configuration Error", e)
+            app.switch_frames(MergeConfig)
             return
-
-
+        except BaseException as e:
+            error_message.display_fatal_error("Merge Configuration Failure", e)
+            app.switch_frames(MergeConfig)
+            return
 
 
 class SpreadsheetSelect:
@@ -115,22 +120,26 @@ class SpreadsheetSelect:
 
         self._file_path = StringVar()
         self._file_path_entry = Entry(root, textvariable=self._file_path)
-        self._file_path_entry.grid(column=1, columnspan=_column_width - 2,
+        self._file_path_entry.grid(column=1, columnspan=_COLUMN_WIDTH - 2,
                                    row=row, padx=0, pady=15, sticky="nsew")
 
         self._select_btn = Button(root, text="Select...", command=self._select_file)
-        self._select_btn.grid(column=_column_width - 1, row=row, padx=20, pady=15, sticky="nsew")
+        self._select_btn.grid(column=_COLUMN_WIDTH - 1, row=row, padx=20, pady=15, sticky="nsew")
 
         self._overwrite_init_dir = overwrite_init_dir
 
     def _select_file(self):
-        self.file_path = filedialog.askopenfilename(filetypes=[("Excel Spreadsheet", ".xlsx")],
-                                                    title=self.SELECT_SPREADSHEET_TITLE,
-                                                    initialdir=_initial_dir)
+        new_file_path = filedialog.askopenfilename(
+            filetypes=[("Excel Spreadsheet", ".xlsx")],
+            title=self.SELECT_SPREADSHEET_TITLE,
+            initialdir=MergeConfig.initial_dir)
+        if not new_file_path:
+            return
+        self.file_path = new_file_path
 
     @property
     def file_path(self):
-        return self._file_path.get()
+        return Path(self._file_path.get().strip())
 
     @file_path.setter
     def file_path(self, file_path):
@@ -140,8 +149,7 @@ class SpreadsheetSelect:
 
         # Save initial dir in the parent directory of this newly selected file
         if self._overwrite_init_dir:
-            global _initial_dir
-            _initial_dir = os.path.dirname(file_path)
+            MergeConfig.initial_dir = os.path.dirname(file_path)
 
 
 class EntryWithLabel:
@@ -151,7 +159,7 @@ class EntryWithLabel:
 
         self._entry_text = StringVar()
         self._entry = Entry(root, textvariable=self._entry_text)
-        self._entry.grid(column=1, columnspan=_column_width - 1,
+        self._entry.grid(column=1, columnspan=_COLUMN_WIDTH - 1,
                          row=row, padx=20, pady=15, sticky="nsew")
 
     @property
@@ -171,8 +179,9 @@ class CheckToHideEntry(Frame):
     def __init__(self, root, check_label_text: str, entry_label: str, additional_check_handle=None,
                  check_state=True):
         """
-        :param additional_check_handle: is a function that is called after handling the initial check of the checkbox.
-        This function takes a bool as a parameter.
+        Arguments:
+            additional_check_handle: is a function that is called after handling the initial check of the checkbox.
+            This function takes a bool as a parameter.
         """
         super().__init__(root, padding=("20", "20", "20", "20"), relief="solid")
         self.grid_rowconfigure(0, weight=1)
@@ -180,7 +189,7 @@ class CheckToHideEntry(Frame):
 
         self._check_state = IntVar(value=int(check_state))
         self._check = Checkbutton(self, variable=self._check_state, text=check_label_text, command=self._check_handler)
-        self._check.grid(column=0, row=0, columnspan=_column_width, sticky="ns")
+        self._check.grid(column=0, row=0, columnspan=_COLUMN_WIDTH, sticky="ns")
 
         self._entry = EntryWithLabel(self, 1, entry_label)
 
@@ -200,9 +209,6 @@ class CheckToHideEntry(Frame):
     def _check_handler(self):
         checked = self.checked
         self._entry.disable_entry(disable=checked)
-
-        if checked:
-            self._entry.entry_text = ""
 
         if self._additional_check_handle is not None:
             self._additional_check_handle(checked)

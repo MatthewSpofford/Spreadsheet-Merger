@@ -1,60 +1,53 @@
-import os
-import signal
 from copy import copy
-from enum import Enum, auto
-from multiprocessing import Process, Pipe
-from multiprocessing.dummy.connection import Connection
-from typing import Optional, NamedTuple, Union, get_args, Tuple
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, NamedTuple, Tuple
 
 import openpyxl as pyxl
 import openpyxl.writer.excel
 from openpyxl import Workbook
+from openpyxl.comments import Comment
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.cell.cell import Cell
 
-
-class MessageStatus(str, Enum):
-    INIT = auto()
-    INDEXING = auto()
-    MERGING = auto()
-    SAVING = auto()
-    COMPLETE = auto()
-
-    _INFO = auto()
-
-
-_indexing_scale_down = 0.3
-MessageGroup = Tuple
-f"""
-MessageStatus[0] - status of the merging process\n
-int[1] - current progress value (context dependent on the status string)\n
-int[2] - current maximum value that is trying to be reached (context dependent on the status string)\n
-int[3] - value to shift the current progress value by for representing the overall merge progress
-float[4] - scale down value for current progress (context dependent)
-"""
-MessageType = Union[MessageGroup, str, Exception]
+from exceptions import MergeException
 
 
 class Merger:
-    def __init__(self, main_file_path: str, new_file_path: str, column_key: str, merged_file_name: str):
-        self.merged_file_path = None
-        self.main_file_path = main_file_path
-        self.new_file_path = new_file_path
+
+    def __init__(self, original_file_path: Path, new_file_path: Path, column_key: str,
+                 merged_file_name: Optional[str] = None):
+        """
+        Given two spreadsheet files, and a column name that is used to identify each row, merge the two spreadsheet
+        files together. If there are any rows that are shared between both spreadsheets, the new the original
+        spreadsheet's cells will be updated based on the information contained in the new spreadsheet. If there are
+        rows in the new spreadsheet that do not exist in the original, they will also be added to the original sheet.
+        Then, these merged sheet is either saved/overwritten to the original file, or is saved to a different file.
+        """
+        self.original_file_path = original_file_path.resolve()
+        self.new_file_path = new_file_path.resolve()
         self.column_key = column_key
-        self.merged_file_name = merged_file_name
 
-        if os.path.realpath(self.new_file_path) == os.path.realpath(self.main_file_path):
-            raise Exception("Spreadsheet file paths cannot be identical.")
+        if self.new_file_path == self.original_file_path:
+            raise MergeException("Spreadsheet file paths cannot be identical.")
 
-        self._main_wb: Workbook = pyxl.load_workbook(self.main_file_path)
-        self._main_wb.active = 0
-        self._main_sheet: Worksheet = self._main_wb.active
-        self._main_max_row = self._main_sheet.max_row
+        # If the merged file name is blank, assume that the main file will be used instead
+        if not merged_file_name:
+            self.merged_file_path = self.original_file_path
+        else:
+            merged_file_dir = self.original_file_path.parent
+            merged_file_ext = self.original_file_path.suffix
+            self.merged_file_path = merged_file_dir.joinpath(f"{merged_file_name}{merged_file_ext}").resolve()
 
-        self._new_wb: Workbook = pyxl.load_workbook(self.new_file_path)  # , read_only=True)
+        self._original_wb: Workbook = pyxl.load_workbook(self.original_file_path)
+        self._original_wb.active = 0
+        self._original_sheet: Worksheet = self._original_wb.active
+        self._original_max_row: int = self._original_sheet.max_row
+
+        self._new_wb: Workbook = pyxl.load_workbook(self.new_file_path)
         self._new_wb.active = 0
         self._new_sheet: Worksheet = self._new_wb.active
-        self._new_max_row = self._new_sheet.max_row
+        self._new_max_row: int = self._new_sheet.max_row
 
         # Close workbooks, the files no longer need to stay open
         self._clean_stop()
@@ -62,30 +55,18 @@ class Merger:
         # Locate column label positions
         self._label_indices = self._locate_labels()
         if self.column_key not in self._label_indices:
-            raise Exception(f"The key '{self.column_key}' is not a column label in either of the spreadsheets.")
+            raise MergeException(f"The key '{self.column_key}' is not a column label in either of the spreadsheets.")
         if self._label_indices[self.column_key].main_label_index is None:
-            raise Exception(f"The key '{self.column_key}' is not a column label in `{self.main_file_path}`.")
+            raise MergeException(f"The key '{self.column_key}' is not a column label in `{self.original_file_path}`.")
         if self._label_indices[self.column_key].new_label_index is None:
-            raise Exception(f"The key '{self.column_key}' is not a column label in `{self.new_file_path}`.")
+            raise MergeException(f"The key '{self.column_key}' is not a column label in `{self.new_file_path}`.")
 
         # Locate first row of data to use for formatting later
-        self._format_row: Tuple[Cell] = next(self._main_sheet.iter_rows(min_row=2, max_row=2))
-
-        # May be used later for non-blocking functionality for passing around data about the progress
-        self._merger_conn: Optional[Connection] = None
-
-    def _update_status(self, message: MessageType):
-        if self._merger_conn is not None:
-            self._merger_conn.send(message)
+        self._format_row: Tuple[Cell] = next(self._original_sheet.iter_rows(min_row=2, max_row=2))
 
     def merge(self):
-        # import cProfile, time
-        # from pstats import SortKey
-        #
-        # start = time.time()
-        # with cProfile.Profile() as pr:
         try:
-            self._update_status((MessageStatus.MERGING, 0, self._new_max_row - 1, self._main_max_row - 1))
+            self._hook_initialization()
             key_col_indices = self._label_indices[self.column_key]
 
             key_rows = self._map_main_keys(key_col_indices)
@@ -97,8 +78,8 @@ class Merger:
 
                 # If a row wasn't found for this key in the main sheet, it must be new and inserted into the sheet
                 if new_key_val not in key_rows:
-                    self._main_sheet.insert_rows(2)
-                    main_key_row = next(self._main_sheet.iter_rows(min_row=2, max_row=2))
+                    self._original_sheet.insert_rows(2)
+                    main_key_row = next(self._original_sheet.iter_rows(min_row=2, max_row=2))
 
                     self._update_row_formatting(main_key_row)
                 else:
@@ -107,39 +88,27 @@ class Merger:
                 # Update all previous keys in the main sheet with new sheet data
                 self._update_row(main_key_row, new_key_row)
 
-                # Send status update about completed row
-                self._update_status((MessageStatus.MERGING,
-                                     new_key_row_index + 1,
-                                     self._new_max_row - 1,
-                                     (self._main_max_row - 1) * _indexing_scale_down,
-                                     1.0,))
+                self._hook_row_merged(new_key_row_index)
 
-            self._update_status(MessageStatus.SAVING)
+            self._hook_pre_saving()
 
-            # If the merged file name is blank, assume that the main file will be used instead
-            if self.merged_file_name is None or len(self.merged_file_name) == 0:
-                self.merged_file_path = self.main_file_path
-            else:
-                merged_file_dir = os.path.dirname(self.main_file_path)
-                merged_file_ext = os.path.splitext(self.main_file_path)[1]
-                self.merged_file_path = os.path.join(f"{merged_file_dir}", f"{self.merged_file_name}{merged_file_ext}")
+            # Add a comment in the first cell of the sheet to indicate the date the sheet was modified
+            modified_time_str = datetime.now().strftime("%A %B %d %Y, %I:%M%p")
+            self._original_sheet["A1"].comment = Comment(f"Last Updated Time:\n{modified_time_str}",
+                                                         "Spreadsheet Merger")
 
             # Creates a copy
-            openpyxl.writer.excel.save_workbook(self._main_wb, self.merged_file_path)
-            self._update_status(MessageStatus.COMPLETE)
+            openpyxl.writer.excel.save_workbook(self._original_wb, str(self.merged_file_path))
+            self._hook_success()
         except BaseException as e:
-            if self._merger_conn is not None:
-                self._merger_conn.send(e)
-            raise e
+            self._hook_exception()
+            raise e from e
         finally:
             self._clean_stop()
 
-        # print(time.time() - start)
-        # pr.print_stats(SortKey.TIME)
-
     def _clean_stop(self):
         # Close workbook files
-        self._main_wb.close()
+        self._original_wb.close()
         self._new_wb.close()
 
     class _LabelIndices(NamedTuple):
@@ -151,7 +120,7 @@ class Merger:
         label_indices = {}
 
         # Iterate over all the column labels in the main sheet
-        for (main_label_cell,) in self._main_sheet.iter_cols(max_row=1):
+        for (main_label_cell,) in self._original_sheet.iter_cols(max_row=1):
             # if the main column label is empty, skip it
             if main_label_cell.value is None:
                 continue
@@ -177,15 +146,11 @@ class Merger:
 
     def _map_main_keys(self, key_col_indices):
         main_key_rows = {}
-        for key_row_index, key_row in enumerate(self._main_sheet.iter_rows(min_row=2)):
+        for key_row_index, key_row in enumerate(self._original_sheet.iter_rows(min_row=2)):
             main_key_val = key_row[key_col_indices.main_label_index].value
             main_key_rows[main_key_val] = key_row
 
-            self._update_status((MessageStatus.INDEXING,
-                                 key_row_index + 1,
-                                 self._main_max_row - 1,
-                                 0,
-                                 _indexing_scale_down))
+            self._hook_row_indexed(key_row_index)
 
         return main_key_rows
 
@@ -210,53 +175,38 @@ class Merger:
             cell.quotePrefix = copy(format_cell.quotePrefix)
             cell.pivotButton = copy(format_cell.pivotButton)
 
+    def _hook_initialization(self):
+        """
+        Hook that runs immediately before both the indexing and merge processes are about to start.
+        """
 
-class NonblockingMerger(Merger):
-    def __init__(self, *args):
-        super().__init__(*args)
+    def _hook_row_indexed(self, row_index):
+        """
+        Hook that runs when a row has been indexed, but not yet merged.
 
-        self._nonblock_conn, self._merger_conn = Pipe()
-        self._merge_proc = Process(target=self._start_merge, daemon=True)
+        Args:
+            row_index (int): Index of the row that was just indexed pre-merge.
+        """
 
-    def merge(self):
-        self._merge_proc.start()
+    def _hook_row_merged(self, row_index):
+        """
+        Hook that runs immediately after a row in the spreadsheet has been merged.
 
-    def get_max_progress(self):
-        return (self._new_max_row - 1) + (self._main_max_row - 1) * _indexing_scale_down
+        Args:
+            row_index (int): Index of the row that was just merged.
+        """
 
-    def _start_merge(self):
-        # Set up a termination handler for the new process in the case it needs to be cancelled
-        def termination_handler(*_):
-            print("STOPPING MERGE PROCESS")
-            self._clean_stop()
-            exit(1)
+    def _hook_pre_saving(self):
+        """
+        Hook that runs right before saving the merged rows to a new file.
+        """
 
-        signal.signal(signal.SIGTERM, termination_handler)
+    def _hook_success(self):
+        """
+        Hook that runs when the merge process completes successfully.
+        """
 
-        # Send initialization status before merging
-        self._update_status(MessageStatus.INIT)
-
-        # Begin the blocking merge process on the new process
-        super().merge()
-
-    def stop(self):
-        self._merge_proc.terminate()
-        self._merge_proc.join()
-
-    def is_stopped(self):
-        return self._merge_proc.is_alive()
-
-    def get_status(self) -> Optional[MessageType]:
-        message: Optional[MessageType] = None
-        while self._nonblock_conn.poll():
-            message = self._nonblock_conn.recv()
-
-        # If the message received is not of the expected type, then something has gone wrong
-        if not (isinstance(message, get_args(MessageType)) or message is None):
-            raise Exception("Received invalid status update during merge process.")
-
-        # An error occurred in the merge process
-        if isinstance(message, Exception):
-            raise message
-
-        return message
+    def _hook_exception(self):
+        """
+        Hook that runs when the merge process fails with an exception.
+        """
