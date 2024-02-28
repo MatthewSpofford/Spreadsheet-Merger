@@ -51,11 +51,11 @@ class NonblockingMerger(Merger):
         self._nonblock_conn, self._merger_conn = Pipe()
         self._merge_proc = Process(target=self._start_merge, daemon=True)
 
-        # Maximum progress is subtracted by 1 to account for the header rows on each sheet.
+        # Maximum progress is subtracted to account for the header rows on each sheet.
         # The maximum row count for the original sheet is used to determine the indexing progress.
-        self._max_indexing_progress = self._original_max_row - 1
+        self._max_indexing_progress = self._original_max_row - self.original_header_row
         # The maximum row count for the new sheet is used to determine the merging progress.
-        self._max_merging_progress = self._new_max_row - 1
+        self._max_merging_progress = self._new_max_row - self.new_header_row
 
     def merge(self):
         self._merge_proc.start()

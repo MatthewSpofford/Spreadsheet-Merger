@@ -6,10 +6,10 @@ from typing import Optional, NamedTuple, Tuple
 import openpyxl as pyxl
 import openpyxl.writer.excel
 from openpyxl import Workbook
-from openpyxl.comments import Comment
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.cell.cell import Cell
 
+from _config import ConfigProperty, Config
 from merger.exceptions import MergeException
 
 
@@ -52,17 +52,24 @@ class Merger:
         # Close workbooks, the files no longer need to stay open
         self._clean_stop()
 
-        # Locate column label positions
-        self._label_indices = self._locate_labels()
-        if self.column_key not in self._label_indices:
+        # Locate header rows
+        self.original_header_row = self._locate_header_row(self._original_sheet)
+        self._original_first_data_row = self.original_header_row + 1
+        self.new_header_row = self._locate_header_row(self._new_sheet)
+        self._new_first_data_row = self.new_header_row + 1
+        if not (self.original_header_row and self.new_header_row):
             raise MergeException(f"The key '{self.column_key}' is not a column label in either of the spreadsheets.")
-        if self._label_indices[self.column_key].main_label_index is None:
+        elif not self.original_header_row:
             raise MergeException(f"The key '{self.column_key}' is not a column label in `{self.original_file_path}`.")
-        if self._label_indices[self.column_key].new_label_index is None:
+        elif not self.new_header_row:
             raise MergeException(f"The key '{self.column_key}' is not a column label in `{self.new_file_path}`.")
 
+        # Locate column label positions
+        self._label_indices = self._locate_labels()
+
         # Locate first row of data to use for formatting later
-        self._format_row: Tuple[Cell] = next(self._original_sheet.iter_rows(min_row=2, max_row=2))
+        self._format_row: Tuple[Cell] = next(self._original_sheet.iter_rows(min_row=self._original_first_data_row,
+                                                                            max_row=self._original_first_data_row))
 
     def merge(self):
         try:
@@ -72,14 +79,15 @@ class Merger:
             key_rows = self._map_main_keys(key_col_indices)
 
             # Find all rows in the main sheet based on the current key value in the new sheet
-            new_rows = self._new_sheet.iter_rows(min_row=2, max_row=self._new_max_row)
+            new_rows = self._new_sheet.iter_rows(min_row=self._new_first_data_row, max_row=self._new_max_row)
             for new_key_row_index, new_key_row in enumerate(new_rows):
                 new_key_val = new_key_row[key_col_indices.new_label_index].value
 
                 # If a row wasn't found for this key in the main sheet, it must be new and inserted into the sheet
                 if new_key_val not in key_rows:
-                    self._original_sheet.insert_rows(2)
-                    main_key_row = next(self._original_sheet.iter_rows(min_row=2, max_row=2))
+                    self._original_sheet.insert_rows(self._original_first_data_row)
+                    main_key_row = next(self._original_sheet.iter_rows(min_row=self._original_first_data_row,
+                                                                       max_row=self._original_first_data_row))
 
                     self._update_row_formatting(main_key_row)
                 else:
@@ -92,10 +100,7 @@ class Merger:
 
             self._hook_pre_saving()
 
-            # Add a comment in the first cell of the sheet to indicate the date the sheet was modified
-            modified_time_str = datetime.now().strftime("%A %B %d %Y, %I:%M%p")
-            self._original_sheet["A1"].comment = Comment(f"Last Time Merged:\n{modified_time_str}",
-                                                         "Spreadsheet Merger")
+            self._add_timestamp()
 
             # Creates a copy
             openpyxl.writer.excel.save_workbook(self._original_wb, str(self.merged_file_path))
@@ -115,18 +120,29 @@ class Merger:
         main_label_index: int
         new_label_index: Optional[int]
 
+    def _locate_header_row(self, sheet) -> int:
+        # Iterate over all columns in the main sheet to find the header column (based on where the column key is)
+        for row in sheet.rows:
+            for cell in row:
+                if cell.value == self.column_key:
+                    return cell.row
+
+        return 0
+
     def _locate_labels(self):
         """Map column label indexes used in new sheet to the main sheet indexes"""
-        label_indices = {}
+        label_indices: dict[str, Merger._LabelIndices] = {}
 
         # Iterate over all the column labels in the main sheet
-        for (main_label_cell,) in self._original_sheet.iter_cols(max_row=1):
+        for (main_label_cell,) in self._original_sheet.iter_cols(min_row=self.original_header_row,
+                                                                 max_row=self.original_header_row):
             # if the main column label is empty, skip it
             if main_label_cell.value is None:
                 continue
 
             # Find new sheet position of current column label being examined in the main sheet
-            for (new_label_cell,) in self._new_sheet.iter_cols(max_row=1):
+            for (new_label_cell,) in self._new_sheet.iter_cols(min_row=self.new_header_row,
+                                                               max_row=self.new_header_row):
 
                 # if the new column label is empty, skip it
                 if new_label_cell.value is None:
@@ -146,7 +162,7 @@ class Merger:
 
     def _map_main_keys(self, key_col_indices):
         main_key_rows = {}
-        for key_row_index, key_row in enumerate(self._original_sheet.iter_rows(min_row=2)):
+        for key_row_index, key_row in enumerate(self._original_sheet.iter_rows(min_row=self._original_first_data_row)):
             main_key_val = key_row[key_col_indices.main_label_index].value
             main_key_rows[main_key_val] = key_row
 
@@ -174,6 +190,18 @@ class Merger:
             cell.alignment = copy(format_cell.alignment)
             cell.quotePrefix = copy(format_cell.quotePrefix)
             cell.pivotButton = copy(format_cell.pivotButton)
+
+    def _add_timestamp(self):
+        timestamp_cell_str = Config.get(ConfigProperty.MERGE_TIMESTAMP_CELL)
+
+        # Add a row in case the header row and timestamp cell might overlap
+        if self._original_sheet[timestamp_cell_str].row == self.original_header_row:
+            self._original_sheet.insert_rows(1)
+
+        # Update cell to indicate the date the sheet was modified
+        modified_time_str = datetime.now().strftime("%A %B %d %Y, %I:%M%p")
+        self._original_sheet[Config.get(ConfigProperty.MERGE_TIMESTAMP_CELL)].value = f"{modified_time_str}"
+
 
     def _hook_initialization(self):
         """

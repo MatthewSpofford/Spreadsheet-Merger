@@ -13,10 +13,10 @@ class _ConfigPropValueWrapper:
 class ConfigProperty(Enum):
     ORIGINAL_PATH = _ConfigPropValueWrapper("")
     COLUMN_KEY = _ConfigPropValueWrapper("Opportunity Id")
-    SHEET_NAME = _ConfigPropValueWrapper("Manager_Opportunity_Dashboard")
     REPLACE_ORIGINAL = _ConfigPropValueWrapper(True)
     MERGED_FILENAME = _ConfigPropValueWrapper("")
     INITIAL_DIR = _ConfigPropValueWrapper("./")
+    MERGE_TIMESTAMP_CELL = _ConfigPropValueWrapper("B1")
 
     def __str__(self):
         return self.name

@@ -51,11 +51,6 @@ class MergeConfig(Frame):
         self._col_key = EntryWithLabel(self, 2, COLUMN_KEY_LABEL)
         self._col_key.entry_text = Config.get(ConfigProperty.COLUMN_KEY)
 
-        if __debug__:
-            self._sheet_name = EntryWithLabel(self, 3, "Worksheet Name to Merge")
-            self._sheet_name.entry_text = "Manager_Opportunity_Dashboard"
-            self._sheet_name.entry_text = Config.get(ConfigProperty.SHEET_NAME)
-
         self._replace_orig_check = CheckToHideEntry(self, REPLACE_ORIG_LABEL, NEW_SPREADSHEET_LABEL)
         self._replace_orig_check.grid(column=0, row=4, columnspan=_COLUMN_WIDTH)
         self._replace_orig_check.checked = Config.get(ConfigProperty.REPLACE_ORIGINAL)
