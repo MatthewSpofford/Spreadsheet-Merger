@@ -66,7 +66,7 @@ class MergeConfig(Frame):
             for select in selectors:
                 # Output error if file path is invalid and cancel merge
                 if not select.file_path.is_file():
-                    raise MergeException("The file path given for the " + select.label_text.lower() + " is not a valid"
+                    raise MergeException("The file path given for the " + select.label_text.lower() + " is not a valid "
                                          "path.")
 
             # Validate that the merge file name is properly filled
@@ -74,15 +74,6 @@ class MergeConfig(Frame):
                (self._replace_orig_check.entry_text is None or len(self._replace_orig_check.entry_text) == 0):
                 raise MergeException("A new name for the file needs to be provided. Or, check the box to have the "
                                      "original spreadsheet be replaced")
-
-            # Save to the configuration file
-            Config.set({
-                ConfigProperty.ORIGINAL_PATH: self._main_select.file_path,
-                ConfigProperty.COLUMN_KEY: self._col_key.entry_text,
-                ConfigProperty.REPLACE_ORIGINAL: self._replace_orig_check.checked,
-                ConfigProperty.MERGED_FILENAME: self._replace_orig_check.entry_text,
-                ConfigProperty.INITIAL_DIR: self.initial_dir,
-            })
 
             # Save new file path for when the configuration window is viewed again
             self.new_file_path = self._new_select.file_path
@@ -92,6 +83,15 @@ class MergeConfig(Frame):
                                        self.new_file_path,
                                        self._col_key.entry_text,
                                        replacement_file)
+
+            # Save to the configuration file
+            Config.set({
+                ConfigProperty.ORIGINAL_PATH: self._main_select.file_path,
+                ConfigProperty.COLUMN_KEY: self._col_key.entry_text,
+                ConfigProperty.REPLACE_ORIGINAL: self._replace_orig_check.checked,
+                ConfigProperty.MERGED_FILENAME: self._replace_orig_check.entry_text,
+                ConfigProperty.INITIAL_DIR: self.initial_dir,
+            })
 
             app.switch_frames(loading_screen.LoadingScreen, merger)
         except MergeException as e:

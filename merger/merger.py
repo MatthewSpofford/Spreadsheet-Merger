@@ -9,7 +9,7 @@ from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.cell.cell import Cell
 
-from _config import ConfigProperty, Config
+from merger._config import ConfigProperty, Config
 from merger.exceptions import MergeException
 
 
@@ -200,7 +200,7 @@ class Merger:
 
         # Update cell to indicate the date the sheet was modified
         modified_time_str = datetime.now().strftime("%A %B %d %Y, %I:%M%p")
-        self._original_sheet[Config.get(ConfigProperty.MERGE_TIMESTAMP_CELL)].value = f"{modified_time_str}"
+        self._original_sheet[Config.get(ConfigProperty.MERGE_TIMESTAMP_CELL)].value = modified_time_str
 
 
     def _hook_initialization(self):
